@@ -117,8 +117,7 @@ jobs:
             
             # Manual fallback for HTTP components
             if ! grep -q "esp_http_server" ports/esp32/esp32_common.cmake; then
-              sed -i '/esp_event/a\    esp_http_server' ports/esp32/esp32_common.cmake
-              sed -i '/esp_http_server/a\    esp_https_server' ports/esp32/esp32_common.cmake
+              perl -i -pe 's/(esp_event)/$1\n    esp_http_server\n    esp_https_server/' ports/esp32/esp32_common.cmake
               echo "✅ Added HTTP server components"
             fi
             
