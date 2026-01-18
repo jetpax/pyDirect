@@ -80,90 +80,62 @@ jobs:
         with:
           path: pyDirect
       
-      - name: Setup ESP-IDF
+      - name: Build firmware with ESP-IDF
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: ${{ env.ESP_IDF_VERSION }}
           target: esp32s3
-          command: echo "ESP-IDF environment ready"
-      
-      - name: Clone MicroPython
-        run: |
-          git clone --depth 1 --branch ${{ needs.check-version.outputs.mpy_version }} \
-            ${{ env.MICROPYTHON_REPO }} micropython
-          cd micropython
-          echo "📦 Cloned MicroPython ${{ needs.check-version.outputs.mpy_version }}"
-      
-      - name: Apply ESP-IDF v5.5.1 workaround
-        run: |
-          # ESP-IDF v5.5.1 has a bug where the esp32s3 mspi_timing include directory is missing
-          # This causes build failures when SPIRAM is enabled with certain components
-          # Creating the missing directory resolves the issue
-          MSPI_DIR="$IDF_PATH/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
-          if [ ! -d "$MSPI_DIR" ]; then
-            echo "🔧 Creating missing ESP-IDF include directory for ESP32-S3 MSPI timing..."
-            mkdir -p "$MSPI_DIR"
-            touch "$MSPI_DIR/.gitkeep"
-            echo "✅ Created: $MSPI_DIR"
-          else
-            echo "✅ ESP-IDF include directory already exists"
-          fi
-      
-      - name: Apply patches
-        run: |
-          cd micropython
-          echo "🔧 Applying pyDirect patches..."
-          
-          # Try to apply patches
-          PATCH_FAILED=false
-          for patch in ../pyDirect/docs/patches/*.patch; do
-            echo "Applying $(basename $patch)..."
-            if ! git apply --check "$patch" 2>/dev/null; then
-              echo "⚠️  Patch $(basename $patch) doesn't apply cleanly"
-              PATCH_FAILED=true
-            else
-              git apply "$patch"
-              echo "✅ Applied $(basename $patch)"
-            fi
-          done
-          
-          # If patches failed, try manual edits (fallback)
-          if [ "$PATCH_FAILED" = true ]; then
-            echo "⚠️  Some patches failed - attempting manual edits..."
+          path: '.'
+          command: |
+            set -e
+            echo "📦 Setting up build environment..."
             
-            # Add HTTP server components to esp32_common.cmake
+            # Clone MicroPython
+            git clone --depth 1 --branch ${{ needs.check-version.outputs.mpy_version }} \
+              ${{ env.MICROPYTHON_REPO }} micropython
+            cd micropython
+            echo "✅ Cloned MicroPython ${{ needs.check-version.outputs.mpy_version }}"
+            
+            # Apply ESP-IDF v5.5.1 workaround (inside Docker, IDF_PATH is /opt/esp/idf)
+            MSPI_DIR="/opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+            if [ ! -d "$MSPI_DIR" ]; then
+              echo "🔧 Creating missing ESP-IDF include directory..."
+              mkdir -p "$MSPI_DIR"
+              touch "$MSPI_DIR/.gitkeep"
+            fi
+            
+            # Apply patches
+            echo "🔧 Applying pyDirect patches..."
+            for patch in ../pyDirect/docs/patches/*.patch; do
+              if git apply --check "$patch" 2>/dev/null; then
+                git apply "$patch"
+                echo "✅ Applied $(basename $patch)"
+              else
+                echo "⚠️ Patch $(basename $patch) skipped"
+              fi
+            done
+            
+            # Manual fallback for HTTP components
             if ! grep -q "esp_http_server" ports/esp32/esp32_common.cmake; then
               sed -i '/esp_event/a\    esp_http_server\n    esp_https_server' \
                 ports/esp32/esp32_common.cmake
-              echo "✅ Added HTTP server components"
             fi
             
-            # Add managed components to idf_component.yml
-            if ! grep -q "littlefs" ports/esp32/idf_component.yml; then
-              sed -i '/^dependencies:/a\  joltwallet/littlefs: "^1.0.0"\n  husarnet/esp_husarnet: "^0.0.15"' \
-                ports/esp32/idf_component.yml
-              echo "✅ Added managed components"
-            fi
-          fi
-      
-      - name: Build MicroPython cross-compiler
-        run: |
-          cd micropython
-          make -C mpy-cross -j$(nproc)
-      
-      - name: Initialize submodules
-        run: |
-          cd micropython
-          git submodule update --init --recursive
-      
-      - name: Build firmware for ${{ matrix.board }}
-        run: |
-          cd pyDirect
-          export MPY_DIR=$GITHUB_WORKSPACE/micropython
-          export ESP_IDF_PATH=$IDF_PATH
-          
-          # Build with all modules enabled
-          ./build.sh ${{ matrix.board }} all
+            # Build cross-compiler
+            echo "🔨 Building mpy-cross..."
+            make -C mpy-cross -j$(nproc)
+            
+            # Init submodules
+            git submodule update --init --recursive
+            
+            # Build firmware
+            cd ../pyDirect
+            export MPY_DIR=$GITHUB_WORKSPACE/micropython
+            export ESP_IDF_PATH=/opt/esp/idf
+            export PYDIRECT_DIR=$GITHUB_WORKSPACE/pyDirect
+            
+            echo "🔨 Building firmware for ${{ matrix.board }}..."
+            ./build.sh ${{ matrix.board }} all
       
       - name: Install mklittlefs
         run: |
