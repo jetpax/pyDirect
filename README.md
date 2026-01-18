@@ -1,6 +1,24 @@
 # pyDirect: Fast path acceleration for Modules for Embedded Python 
 
+[![Build Firmware](https://github.com/jetpax/pyDirect/actions/workflows/build-firmware.yml/badge.svg)](https://github.com/jetpax/pyDirect/actions/workflows/build-firmware.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.5.1-blue)](https://github.com/espressif/esp-idf)
+[![MicroPython](https://img.shields.io/badge/MicroPython-v1.27+-green)](https://micropython.org/)
+
 **pyDirect** is a suite of high-performance C modules for embedded Python environments, with initial focus on MicroPython ESP32 platforms. These modules provide production-ready functionality for networking, communication protocols, and device connectivity.
+
+## 📦 Included Modules
+
+| Module | Description |
+|--------|-------------|
+| ![httpserver](https://img.shields.io/badge/httpserver-HTTP%2FHTTPS%20Server-6366f1) | Complete HTTP/HTTPS server with WebSocket support |
+| ![webrepl](https://img.shields.io/badge/webrepl-Remote%20REPL-8b5cf6) | WebSocket & WebRTC remote Python access |
+| ![webrtc](https://img.shields.io/badge/webrtc-DataChannel-a855f7) | Browser-native P2P communication |
+| ![can](https://img.shields.io/badge/can-CAN%20Bus-ef4444) | TWAI/CAN 2.0 for automotive applications |
+| ![gvret](https://img.shields.io/badge/gvret-SavvyCAN-f97316) | GVRET protocol for CAN analysis |
+| ![plc](https://img.shields.io/badge/plc-V2G%20Protocol-22c55e) | DIN 70121 EXI codec for EV charging |
+| ![husarnet](https://img.shields.io/badge/husarnet-P2P%20VPN-0ea5e9) | Zero-config global device connectivity |
+| ![usbmodem](https://img.shields.io/badge/usbmodem-LTE%2F4G%2F5G-14b8a6) | USB Host cellular modem support |
 
 ## 🎯 Project Goals
 
@@ -12,7 +30,19 @@
 
 ## 🚀 Quick Start
 
-### Pre-Built Firmware (Easiest)
+### One-Click Web Installer (Easiest!)
+
+Flash pyDirect directly from your browser - no tools required:
+
+<p align="center">
+  <a href="https://jetpax.github.io/pyDirect/">
+    <img src="https://img.shields.io/badge/⚡_Install_pyDirect-Click_Here-6366f1?style=for-the-badge&logoColor=white" alt="Install pyDirect" />
+  </a>
+</p>
+
+> **Requires:** Chrome, Edge, or Opera on desktop. Automatically detects your ESP32 chip type!
+
+### Pre-Built Firmware
 
 Download pre-built firmware for your board from [Releases](https://github.com/jetpax/pyDirect/releases):
 
