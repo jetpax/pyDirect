@@ -1,0 +1,19 @@
+{
+  "name": "pyDirect",
+  "version": "1.0.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "https://github.com/jetpax/pyDirect/releases/latest/download/pyDirect-ESP32_S3_N8R2-merged.bin", "offset": 0 }
+      ]
+    },
+    {
+      "chipFamily": "ESP32-P4",
+      "parts": [
+        { "path": "https://github.com/jetpax/pyDirect/releases/latest/download/pyDirect-SCRIPTO_P4-merged.bin", "offset": 0 }
+      ]
+    }
+  ]
+}

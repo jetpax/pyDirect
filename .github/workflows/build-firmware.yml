@@ -1,0 +1,322 @@
+name: Build pyDirect Firmware
+
+on:
+  # Manual trigger with version selection
+  workflow_dispatch:
+    inputs:
+      micropython_version:
+        description: 'MicroPython version tag (e.g., v1.27.0, v1.28.0)'
+        required: true
+        default: 'v1.27.0'
+      create_release:
+        description: 'Create GitHub release with artifacts'
+        required: true
+        type: boolean
+        default: true
+  
+  # Scheduled check for new MicroPython releases (daily at 00:00 UTC)
+  schedule:
+    - cron: '0 0 * * *'
+  
+  # Trigger on pyDirect releases
+  release:
+    types: [published]
+
+env:
+  ESP_IDF_VERSION: v5.5.1
+  MICROPYTHON_REPO: https://github.com/micropython/micropython.git
+
+jobs:
+  check-version:
+    name: Check for new MicroPython release
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      mpy_version: ${{ steps.check.outputs.mpy_version }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for new version
+        id: check
+        run: |
+          # For manual dispatch, always build
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "mpy_version=${{ github.event.inputs.micropython_version }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # For scheduled runs, check for new releases
+          LATEST=$(curl -s https://api.github.com/repos/micropython/micropython/releases/latest | jq -r .tag_name)
+          CURRENT=$(cat .micropython-version 2>/dev/null || echo "v0.0.0")
+          
+          echo "Latest MicroPython: $LATEST"
+          echo "Current tracked: $CURRENT"
+          
+          if [ "$LATEST" != "$CURRENT" ]; then
+            echo "🆕 New MicroPython release detected: $LATEST"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "mpy_version=$LATEST" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Already up to date"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "mpy_version=$CURRENT" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build ${{ matrix.board }}
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        board: [SCRIPTO_P4, SCRIPTO_S3, RETROVMS_MINI, ESP32_S3_N8R2]
+      fail-fast: false
+    
+    steps:
+      - name: Checkout pyDirect
+        uses: actions/checkout@v4
+        with:
+          path: pyDirect
+      
+      - name: Setup ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: ${{ env.ESP_IDF_VERSION }}
+          target: esp32s3
+      
+      - name: Clone MicroPython
+        run: |
+          git clone --depth 1 --branch ${{ needs.check-version.outputs.mpy_version }} \
+            ${{ env.MICROPYTHON_REPO }} micropython
+          cd micropython
+          echo "📦 Cloned MicroPython ${{ needs.check-version.outputs.mpy_version }}"
+      
+      - name: Apply ESP-IDF v5.5.1 workaround
+        run: |
+          # ESP-IDF v5.5.1 has a bug where the esp32s3 mspi_timing include directory is missing
+          # This causes build failures when SPIRAM is enabled with certain components
+          # Creating the missing directory resolves the issue
+          MSPI_DIR="$IDF_PATH/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+          if [ ! -d "$MSPI_DIR" ]; then
+            echo "🔧 Creating missing ESP-IDF include directory for ESP32-S3 MSPI timing..."
+            mkdir -p "$MSPI_DIR"
+            touch "$MSPI_DIR/.gitkeep"
+            echo "✅ Created: $MSPI_DIR"
+          else
+            echo "✅ ESP-IDF include directory already exists"
+          fi
+      
+      - name: Apply patches
+        run: |
+          cd micropython
+          echo "🔧 Applying pyDirect patches..."
+          
+          # Try to apply patches
+          PATCH_FAILED=false
+          for patch in ../pyDirect/docs/patches/*.patch; do
+            echo "Applying $(basename $patch)..."
+            if ! git apply --check "$patch" 2>/dev/null; then
+              echo "⚠️  Patch $(basename $patch) doesn't apply cleanly"
+              PATCH_FAILED=true
+            else
+              git apply "$patch"
+              echo "✅ Applied $(basename $patch)"
+            fi
+          done
+          
+          # If patches failed, try manual edits (fallback)
+          if [ "$PATCH_FAILED" = true ]; then
+            echo "⚠️  Some patches failed - attempting manual edits..."
+            
+            # Add HTTP server components to esp32_common.cmake
+            if ! grep -q "esp_http_server" ports/esp32/esp32_common.cmake; then
+              sed -i '/esp_event/a\    esp_http_server\n    esp_https_server' \
+                ports/esp32/esp32_common.cmake
+              echo "✅ Added HTTP server components"
+            fi
+            
+            # Add managed components to idf_component.yml
+            if ! grep -q "littlefs" ports/esp32/idf_component.yml; then
+              sed -i '/^dependencies:/a\  joltwallet/littlefs: "^1.0.0"\n  husarnet/esp_husarnet: "^0.0.15"' \
+                ports/esp32/idf_component.yml
+              echo "✅ Added managed components"
+            fi
+          fi
+      
+      - name: Build MicroPython cross-compiler
+        run: |
+          cd micropython
+          make -C mpy-cross -j$(nproc)
+      
+      - name: Initialize submodules
+        run: |
+          cd micropython
+          git submodule update --init --recursive
+      
+      - name: Build firmware for ${{ matrix.board }}
+        run: |
+          cd pyDirect
+          export MPY_DIR=$GITHUB_WORKSPACE/micropython
+          export ESP_IDF_PATH=$IDF_PATH
+          
+          # Build with all modules enabled
+          ./build.sh ${{ matrix.board }} all
+      
+      - name: Install mklittlefs
+        run: |
+          echo "📦 Installing mklittlefs for VFS partition creation..."
+          git clone --depth 1 https://github.com/earlephilhower/mklittlefs /tmp/mklittlefs
+          cd /tmp/mklittlefs
+          git submodule update --init
+          make
+          sudo cp mklittlefs /usr/local/bin/
+          mklittlefs --version
+      
+      - name: Create merged firmware with VFS
+        run: |
+          cd pyDirect
+          export MPY_DIR=$GITHUB_WORKSPACE/micropython
+          export ESP_IDF_PATH=$IDF_PATH
+          
+          # Create merged firmware with pre-built VFS
+          ./build.sh ${{ matrix.board }} merge
+      
+      - name: Prepare artifacts
+        run: |
+          cd micropython/ports/esp32/build-${{ matrix.board }}
+          
+          # Create firmware package
+          mkdir -p $GITHUB_WORKSPACE/artifacts
+          cp micropython.bin $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}.bin
+          cp micropython.elf $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}.elf
+          cp micropython.map $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}.map
+          
+          # Copy merged firmware for web flasher
+          if [ -f "pyDirect-${{ matrix.board }}-merged.bin" ]; then
+            cp pyDirect-${{ matrix.board }}-merged.bin $GITHUB_WORKSPACE/artifacts/
+            echo "✅ Merged firmware copied to artifacts"
+          fi
+          
+          # Create build info
+          cat > $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-build-info.txt << EOF
+          pyDirect Firmware Build Information
+          ====================================
+          
+          Board: ${{ matrix.board }}
+          MicroPython Version: ${{ needs.check-version.outputs.mpy_version }}
+          ESP-IDF Version: ${{ env.ESP_IDF_VERSION }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Git Commit: ${{ github.sha }}
+          
+          Modules Included:
+          - httpserver (HTTP/HTTPS server, WebSocket, WebDAP)
+          - webrepl (WebREPL over WebSocket and WebRTC)
+          - webrtc (WebRTC DataChannel)
+          - can (CAN/TWAI bus support)
+          - gvret (GVRET protocol for SavvyCAN)
+          - husarnet (P2P VPN)
+          - usbmodem (USB modem support)
+          - plc (PLC/V2G support)
+          
+          Firmware Size: $(stat -f%z micropython.bin 2>/dev/null || stat -c%s micropython.bin) bytes
+          EOF
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}
+          path: artifacts/*
+          retention-days: 90
+
+  create-release:
+    name: Create GitHub Release
+    needs: [check-version, build]
+    if: |
+      needs.check-version.outputs.should_build == 'true' && 
+      (github.event_name == 'schedule' || 
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true'))
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      
+      - name: Prepare release
+        run: |
+          mkdir -p release
+          find release-artifacts -name "*.bin" -exec cp {} release/ \;
+          find release-artifacts -name "*build-info.txt" -exec cp {} release/ \;
+          
+          # Create release notes
+          cat > release/RELEASE_NOTES.md << EOF
+          # pyDirect Firmware - MicroPython ${{ needs.check-version.outputs.mpy_version }}
+          
+          Pre-built firmware for pyDirect modules based on MicroPython ${{ needs.check-version.outputs.mpy_version }}.
+          
+          ## Supported Boards
+          
+          - **SCRIPTO_P4** - ESP32-P4 based board
+          - **SCRIPTO_S3** - ESP32-S3 based board  
+          - **RETROVMS_MINI** - Compact ESP32-S3 variant
+          
+          ## Included Modules
+          
+          All builds include the complete pyDirect module suite:
+          
+          - 🌐 **httpserver** - HTTP/HTTPS server with WebSocket support
+          - 📡 **webrepl** - WebREPL over WebSocket and WebRTC
+          - 🎥 **webrtc** - WebRTC DataChannel for browser integration
+          - 🚗 **can** - CAN/TWAI bus support
+          - 🔧 **gvret** - GVRET protocol (CAN over TCP for SavvyCAN)
+          - 🔐 **husarnet** - P2P VPN networking
+          - 📱 **usbmodem** - USB modem support
+          - ⚡ **plc** - PLC/V2G protocol support
+          
+          ## Installation
+          
+          1. Download the \`.bin\` file for your board
+          2. Flash using esptool:
+             \`\`\`bash
+             esptool.py --chip esp32s3 --port /dev/ttyUSB0 write_flash -z 0x0 pyDirect-SCRIPTO_S3-*.bin
+             \`\`\`
+          3. Connect via ScriptO Studio or serial terminal
+          
+          ## Build Information
+          
+          - **MicroPython**: ${{ needs.check-version.outputs.mpy_version }}
+          - **ESP-IDF**: ${{ env.ESP_IDF_VERSION }}
+          - **Build Date**: $(date -u +"%Y-%m-%d")
+          - **Commit**: ${{ github.sha }}
+          
+          ## Documentation
+          
+          - [pyDirect README](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [Build Guide](https://github.com/${{ github.repository }}/blob/main/docs/BUILD_GUIDE.md)
+          - [Production Certificates](https://github.com/${{ github.repository }}/blob/main/docs/PRODUCTION_CERTIFICATES.md)
+          EOF
+      
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: pyDirect-${{ needs.check-version.outputs.mpy_version }}
+          name: pyDirect ${{ needs.check-version.outputs.mpy_version }}
+          body_path: release/RELEASE_NOTES.md
+          files: release/*.bin
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Update version tracking
+        run: |
+          echo "${{ needs.check-version.outputs.mpy_version }}" > .micropython-version
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .micropython-version
+          git commit -m "Track MicroPython ${{ needs.check-version.outputs.mpy_version }}"
+          git push

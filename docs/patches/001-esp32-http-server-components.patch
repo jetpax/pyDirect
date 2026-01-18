@@ -1,0 +1,25 @@
+From: mpDirect <mpDirect@scripto.studio>
+Subject: [PATCH 1/2] esp32: Add HTTP server IDF components for mpDirect
+
+Add esp_http_server and esp_https_server to the list of IDF components.
+Required for mpDirect httpserver USER_C_MODULES.
+
+---
+ ports/esp32/esp32_common.cmake | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ports/esp32/esp32_common.cmake b/ports/esp32/esp32_common.cmake
+index 9e8acf889..d25a9b9b6 100644
+--- a/ports/esp32/esp32_common.cmake
++++ b/ports/esp32/esp32_common.cmake
+@@ -161,6 +161,8 @@ list(APPEND IDF_COMPONENTS
+     esp_common
+     esp_eth
+     esp_event
++    esp_http_server  # Required for mpDirect httpserver USER_C_MODULES
++    esp_https_server  # Required for mpDirect httpserver USER_C_MODULES (HTTPS support)
+     esp_hw_support
+     esp_netif
+     esp_partition
+-- 
+2.39.0

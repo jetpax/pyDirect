@@ -1,0 +1,27 @@
+From: mpDirect <mpDirect@scripto.studio>
+Subject: [PATCH 2/2] esp32: Add managed components for mpDirect modules
+
+Add ESP-IDF managed components required by mpDirect:
+- joltwallet/littlefs: for modwebfiles.c (esp_vfs_littlefs)
+- husarnet/esp_husarnet: for Husarnet VPN module
+
+---
+ ports/esp32/main/idf_component.yml | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/ports/esp32/main/idf_component.yml b/ports/esp32/main/idf_component.yml
+index cb14ffde6..7d89d955e 100644
+--- a/ports/esp32/main/idf_component.yml
++++ b/ports/esp32/main/idf_component.yml
+@@ -10,5 +10,9 @@ dependencies:
+     rules:
+       - if: "target == esp32"
+       - if: "idf_version >=5.3"
++  # Required for mpDirect httpserver USER_C_MODULES (modwebfiles.c uses esp_vfs_littlefs)
++  joltwallet/littlefs: "^1.0.0"
++  # Required for mpDirect husarnet VPN module
++  husarnet/esp_husarnet: "^0.0.15"
+   idf:
+     version: ">=5.2.0"
+-- 
+2.39.0

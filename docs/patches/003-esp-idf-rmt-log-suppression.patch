@@ -1,0 +1,13 @@
+diff --git a/components/esp_driver_rmt/src/rmt_common.c b/components/esp_driver_rmt/src/rmt_common.c
+index 6bd08bf63b..cc37e784c3 100644
+--- a/components/esp_driver_rmt/src/rmt_common.c
++++ b/components/esp_driver_rmt/src/rmt_common.c
+@@ -267,7 +267,7 @@ esp_err_t rmt_select_periph_clock(rmt_channel_handle_t chan, rmt_clock_source_t
+     // resolution lost due to division, calculate the real resolution
+     chan->resolution_hz = group->resolution_hz / real_div;
+     if (chan->resolution_hz != expect_channel_resolution) {
+-        ESP_LOGW(TAG, "channel resolution loss, real=%"PRIu32, chan->resolution_hz);
++        ESP_LOGD(TAG, "channel resolution loss, real=%"PRIu32, chan->resolution_hz);
+     }
+     return ret;
+ }

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>pyDirect Firmware Installer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Flash pyDirect MicroPython firmware to your ESP32 board with one click" />
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    
+    .container {
+      max-width: 500px;
+      text-align: center;
+    }
+    
+    .logo {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+    
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .tagline {
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+    
+    .chip-support {
+      background: var(--surface);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .chip-support h3 {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.75rem;
+    }
+    
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    
+    .chip {
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+    }
+    
+    esp-web-install-button {
+      --esp-tools-button-color: var(--primary);
+      --esp-tools-button-text-color: white;
+    }
+    
+    esp-web-install-button button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      font-size: 1.125rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    esp-web-install-button button:hover {
+      background: var(--primary-hover);
+    }
+    
+    .requirements {
+      margin-top: 2rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+    
+    .requirements a {
+      color: #a5b4fc;
+    }
+    
+    .footer {
+      margin-top: 3rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+    
+    .footer a {
+      color: #a5b4fc;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">⚡</div>
+    <h1>pyDirect Firmware Installer</h1>
+    <p class="tagline">Flash MicroPython + pyDirect modules to your ESP32 in one click</p>
+    
+    <div class="chip-support">
+      <h3>Supported Chips</h3>
+      <div class="chips">
+        <span class="chip">ESP32-S3</span>
+        <span class="chip">ESP32-P4</span>
+        <span class="chip">ESP32</span>
+        <span class="chip">ESP32-C3</span>
+        <span class="chip">ESP32-C6</span>
+      </div>
+    </div>
+    
+    <esp-web-install-button manifest="./manifest.json">
+      <button slot="activate">Install pyDirect</button>
+      <span slot="unsupported">
+        Your browser doesn't support Web Serial.<br>
+        Use Chrome, Edge, or Opera on desktop.
+      </span>
+      <span slot="not-allowed">
+        Web Serial requires HTTPS.
+      </span>
+    </esp-web-install-button>
+    
+    <p class="requirements">
+      Requires Chrome, Edge, or Opera on desktop.<br>
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API#browser_compatibility" target="_blank">Browser compatibility</a>
+    </p>
+    
+    <div class="footer">
+      <p>
+        <a href="https://github.com/jetpax/pyDirect">GitHub</a> · 
+        <a href="https://github.com/jetpax/pyDirect/releases">Releases</a> · 
+        Powered by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

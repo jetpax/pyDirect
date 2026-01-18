@@ -1,0 +1,5 @@
+
+# Sensitive files
+**/certs/
+*.pem
+*.key

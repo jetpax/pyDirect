@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket DAP + WebREPL CB Example</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        
+        h2 {
+            color: #666;
+            margin-top: 0;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+        
+        .log {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px;
+        }
+        
+        .log-dap {
+            color: #1976D2;
+        }
+        
+        .log-webrepl {
+            color: #388E3C;
+        }
+        
+        .log-error {
+            color: #D32F2F;
+        }
+        
+        .log-info {
+            color: #666;
+        }
+        
+        .status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: inline-block;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .status-connected {
+            background: #C8E6C9;
+            color: #2E7D32;
+        }
+        
+        .status-disconnected {
+            background: #FFCDD2;
+            color: #C62828;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 WebSocket Protocol Multiplexing Demo</h1>
+    <p><strong>DAP (TEXT frames)</strong> + <strong>WebREPL CB (BINARY frames)</strong> on a single WebSocket</p>
+    
+    <div class="container">
+        <h2>Connection</h2>
+        <div>
+            <input type="text" id="deviceUrl" value="ws://192.168.4.1:8266/webrepl" placeholder="ws://device/webrepl">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+        <div style="margin-top: 10px">
+            <span id="status" class="status status-disconnected">Disconnected</span>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>DAP Debugging (TEXT frames - opcode 0x01)</h2>
+        <button onclick="sendDAPInitialize()" disabled id="dapInitBtn">1. Initialize</button>
+        <button onclick="sendDAPSetBreakpoints()" disabled id="dapBpBtn">2. Set Breakpoints</button>
+        <button onclick="sendDAPThreads()" disabled id="dapThreadsBtn">3. Get Threads</button>
+        <button onclick="sendDAPStackTrace()" disabled id="dapStackBtn">4. Stack Trace</button>
+    </div>
+    
+    <div class="container">
+        <h2>WebREPL CB (BINARY frames - opcode 0x02)</h2>
+        <p><em>Note: This demo shows the concept. Full CBOR encoding would be needed for production.</em></p>
+        <button onclick="sendWebREPLCommand()" disabled id="replBtn">Execute Python Code</button>
+        <button onclick="sendWebREPLFile()" disabled id="fileBtn">Request File List</button>
+    </div>
+    
+    <div class="container">
+        <h2>Message Log</h2>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="log" class="log"></div>
+    </div>
+    
+    <script>
+        let ws = null;
+        let dapSeq = 1;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function updateStatus(connected) {
+            const status = document.getElementById('status');
+            status.textContent = connected ? 'Connected' : 'Disconnected';
+            status.className = `status status-${connected ? 'connected' : 'disconnected'}`;
+            
+            document.getElementById('connectBtn').disabled = connected;
+            document.getElementById('disconnectBtn').disabled = !connected;
+            document.getElementById('dapInitBtn').disabled = !connected;
+            document.getElementById('dapBpBtn').disabled = !connected;
+            document.getElementById('dapThreadsBtn').disabled = !connected;
+            document.getElementById('dapStackBtn').disabled = !connected;
+            document.getElementById('replBtn').disabled = !connected;
+            document.getElementById('fileBtn').disabled = !connected;
+        }
+        
+        function connect() {
+            const url = document.getElementById('deviceUrl').value;
+            log(`Connecting to ${url}...`, 'info');
+            
+            ws = new WebSocket(url);
+            ws.binaryType = 'arraybuffer';
+            
+            ws.onopen = () => {
+                log('✅ WebSocket connected!', 'info');
+                updateStatus(true);
+            };
+            
+            ws.onclose = () => {
+                log('❌ WebSocket disconnected', 'info');
+                updateStatus(false);
+                ws = null;
+            };
+            
+            ws.onerror = (error) => {
+                log(`Error: ${error.message || 'Connection failed'}`, 'error');
+            };
+            
+            ws.onmessage = (event) => {
+                if (typeof event.data === 'string') {
+                    // TEXT frame = DAP protocol
+                    log(`⬅️ DAP (TEXT): ${event.data.substring(0, 100)}...`, 'dap');
+                    handleDAPMessage(event.data);
+                } else {
+                    // BINARY frame = WebREPL Binary Protocol
+                    const byteArray = new Uint8Array(event.data);
+                    log(`⬅️ WebREPL CB (BINARY): ${byteArray.length} bytes`, 'webrepl');
+                    handleWebREPLMessage(byteArray);
+                }
+            };
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+        
+        function sendDAPMessage(command, args = {}) {
+            if (!ws) {
+                log('Not connected!', 'error');
+                return;
+            }
+            
+            const msg = {
+                seq: dapSeq++,
+                type: 'request',
+                command: command,
+                arguments: args
+            };
+            
+            const json = JSON.stringify(msg);
+            const dapFrame = `Content-Length: ${json.length}\r\n\r\n${json}`;
+            
+            // Send as TEXT frame (browser automatically uses opcode 0x01 for strings)
+            ws.send(dapFrame);
+            
+            log(`➡️ DAP (TEXT): ${command}`, 'dap');
+        }
+        
+        function sendDAPInitialize() {
+            sendDAPMessage('initialize', {
+                clientID: 'browser-demo',
+                clientName: 'Browser DAP Demo',
+                adapterID: 'micropython',
+                locale: 'en-US',
+                linesStartAt1: true,
+                columnsStartAt1: true,
+                pathFormat: 'path'
+            });
+        }
+        
+        function sendDAPSetBreakpoints() {
+            sendDAPMessage('setBreakpoints', {
+                source: { path: '/main.py' },
+                breakpoints: [
+                    { line: 10 },
+                    { line: 15 }
+                ]
+            });
+        }
+        
+        function sendDAPThreads() {
+            sendDAPMessage('threads', {});
+        }
+        
+        function sendDAPStackTrace() {
+            sendDAPMessage('stackTrace', {
+                threadId: 1
+            });
+        }
+        
+        function sendWebREPLCommand() {
+            if (!ws) {
+                log('Not connected!', 'error');
+                return;
+            }
+            
+            // This is a simplified example - production would use CBOR encoding
+            // Format: [channel, opcode, data]
+            // Channel 1 (Terminal), Opcode 0 (Execute), Data "print('Hello from WebREPL CB!')"
+            
+            log('➡️ WebREPL CB (BINARY): Execute command', 'webrepl');
+            log('⚠️ Note: Full CBOR encoding needed for production', 'info');
+            
+            // In production, you'd use cbor.js:
+            // const message = CBOR.encode([1, 0, "print('Hello from WebREPL CB!')"]);
+            // ws.send(message);
+        }
+        
+        function sendWebREPLFile() {
+            if (!ws) {
+                log('Not connected!', 'error');
+                return;
+            }
+            
+            log('➡️ WebREPL CB (BINARY): Request file list', 'webrepl');
+            log('⚠️ Note: Full CBOR encoding needed for production', 'info');
+            
+            // In production, you'd use:
+            // const message = CBOR.encode([2, 0, "import os; print(os.listdir('/'))"]);
+            // ws.send(message);
+        }
+        
+        function handleDAPMessage(data) {
+            // Parse Content-Length header and JSON
+            const parts = data.split('\r\n\r\n');
+            if (parts.length < 2) return;
+            
+            try {
+                const json = JSON.parse(parts[1]);
+                log(`  Type: ${json.type}, Command: ${json.command || json.event || 'N/A'}`, 'dap');
+                
+                if (json.type === 'response' && json.body) {
+                    log(`  Success: ${json.success}, Body: ${JSON.stringify(json.body).substring(0, 80)}...`, 'dap');
+                }
+            } catch (e) {
+                log(`  Failed to parse: ${e.message}`, 'error');
+            }
+        }
+        
+        function handleWebREPLMessage(data) {
+            // In production, you'd decode CBOR:
+            // const decoded = CBOR.decode(data);
+            // const [channel, opcode, ...fields] = decoded;
+            log(`  Channel discrimination would happen here`, 'webrepl');
+        }
+        
+        // Log initial instructions
+        log('👋 Welcome to the WebSocket Protocol Multiplexing Demo!', 'info');
+        log('This demonstrates DAP (TEXT) and WebREPL CB (BINARY) on one connection', 'info');
+        log('', 'info');
+        log('📝 Instructions:', 'info');
+        log('1. Make sure your ESP32 has webdap and webrepl running', 'info');
+        log('2. Update the device URL if needed', 'info');
+        log('3. Click Connect', 'info');
+        log('4. Try DAP commands (TEXT frames) and WebREPL commands (BINARY frames)', 'info');
+        log('5. Watch the log to see opcode discrimination in action!', 'info');
+    </script>
+</body>
+</html>

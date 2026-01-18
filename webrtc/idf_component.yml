@@ -1,0 +1,14 @@
+## IDF Component Manager Dependencies for mpDirect WebRTC
+dependencies:
+  # ESP WebRTC solution components
+  espressif/esp_peer: "^1.2.2"
+  
+  # CBOR library for WebREPL Binary Protocol
+  espressif/cbor: "^0.5.7"
+  
+  # Note: media_lib_sal is NOT required for data-channel-only mode
+  # esp_peer includes weak implementations (media_lib_weak.c) that are
+  # sufficient when audio/video codecs are disabled
+  
+  idf:
+    version: ">=5.0.0"
