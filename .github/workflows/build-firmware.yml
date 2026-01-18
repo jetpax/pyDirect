@@ -85,6 +85,7 @@ jobs:
         with:
           esp_idf_version: ${{ env.ESP_IDF_VERSION }}
           target: esp32s3
+          command: echo "ESP-IDF environment ready"
       
       - name: Clone MicroPython
         run: |
