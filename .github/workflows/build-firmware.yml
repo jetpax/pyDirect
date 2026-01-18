@@ -115,11 +115,7 @@ jobs:
               fi
             done
             
-            # Manual fallback for HTTP components
-            if ! grep -q "esp_http_server" ports/esp32/esp32_common.cmake; then
-              perl -i -pe 's/(esp_event)/$1\n    esp_http_server\n    esp_https_server/' ports/esp32/esp32_common.cmake
-              echo "✅ Added HTTP server components"
-            fi
+            # Note: patch 002 adds the HTTP server components, so manual fallback skipped
             
             # Build cross-compiler
             echo "🔨 Building mpy-cross..."
