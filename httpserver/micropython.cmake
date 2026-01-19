@@ -26,5 +26,17 @@ else()
     message(STATUS "pyDirect httpserver: idf::json not available yet (will resolve during build)")
 endif()
 
+# Link LittleFS for webfiles module (needed for managed components)
+# Managed component name is 'joltwallet__littlefs'
+if(TARGET idf::joltwallet__littlefs)
+    target_link_libraries(usermod_httpserver INTERFACE idf::joltwallet__littlefs)
+    message(STATUS "pyDirect httpserver: Linked idf::joltwallet__littlefs component")
+elseif(TARGET idf::littlefs)
+    target_link_libraries(usermod_httpserver INTERFACE idf::littlefs)
+    message(STATUS "pyDirect httpserver: Linked idf::littlefs component")
+else()
+    message(STATUS "pyDirect httpserver: littlefs managed component not found (modwebfiles.c may fail)")
+endif()
+
 # Link the module to MicroPython's usermod target
 target_link_libraries(usermod INTERFACE usermod_httpserver)
