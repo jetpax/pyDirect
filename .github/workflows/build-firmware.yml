@@ -134,7 +134,8 @@ jobs:
             echo "🔨 Building firmware for ${{ matrix.board }}..."
             echo "  PYDIRECT_DIR: $PYDIRECT_DIR"
             echo "  MPY_DIR: $MPY_DIR"
-            ./build.sh ${{ matrix.board }} all
+            # Exclude usbmodem (requires esp-iot-solution dependency not available in CI)
+            ./build.sh ${{ matrix.board }} all -usbmodem
       
       - name: Install mklittlefs
         run: |
