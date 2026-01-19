@@ -126,11 +126,14 @@ jobs:
             
             # Build firmware
             cd ../pyDirect
-            export MPY_DIR=$GITHUB_WORKSPACE/micropython
+            # Use pwd-relative paths that work inside Docker container
+            export PYDIRECT_DIR=$(pwd)
+            export MPY_DIR=$(pwd)/../micropython
             export ESP_IDF_PATH=/opt/esp/idf
-            export PYDIRECT_DIR=$GITHUB_WORKSPACE/pyDirect
             
             echo "🔨 Building firmware for ${{ matrix.board }}..."
+            echo "  PYDIRECT_DIR: $PYDIRECT_DIR"
+            echo "  MPY_DIR: $MPY_DIR"
             ./build.sh ${{ matrix.board }} all
       
       - name: Install mklittlefs
