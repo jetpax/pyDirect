@@ -3,6 +3,10 @@ Improv WiFi Serial Protocol Implementation for MicroPython
 https://www.improv-wifi.com/serial/
 
 Enables WiFi provisioning via serial connection for ESP Web Tools.
+
+Copyright (c) 2025 Jonathan Peace
+SPDX-License-Identifier: MIT
+
 """
 
 import sys
