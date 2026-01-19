@@ -114,19 +114,17 @@ jobs:
             echo "✅ Added esp_http_server/esp_https_server to IDF components"
             
             # Add managed components to idf_component.yml (patch 002 replacement)
-            # Create a temp file with additions and insert before 'idf:' line
-            cat > /tmp/managed_components.yml << 'EOF'
-  # pyDirect dependencies
-  joltwallet/littlefs: "^1.0.0"
-  husarnet/esp_husarnet: "^0.0.15"
-  espressif/cbor: "^0.6.0"
-  espressif/esp_peer: "^1.2.2"
-  espressif/iot_usbh_modem:
-    version: "^2.0.0"
-    rules:
-      - if: "target in [esp32s2, esp32s3, esp32p4]"
-EOF
-            # Insert the managed components before the 'idf:' line
+            # Use printf for multi-line content (heredoc breaks YAML)
+            printf '  # pyDirect dependencies\n' > /tmp/managed_components.yml
+            printf '  joltwallet/littlefs: "^1.0.0"\n' >> /tmp/managed_components.yml
+            printf '  husarnet/esp_husarnet: "^0.0.15"\n' >> /tmp/managed_components.yml
+            printf '  espressif/cbor: "^0.6.0"\n' >> /tmp/managed_components.yml
+            printf '  espressif/esp_peer: "^1.2.2"\n' >> /tmp/managed_components.yml
+            printf '  espressif/iot_usbh_modem:\n' >> /tmp/managed_components.yml
+            printf '    version: "^2.0.0"\n' >> /tmp/managed_components.yml
+            printf '    rules:\n' >> /tmp/managed_components.yml
+            printf '      - if: "target in [esp32s2, esp32s3, esp32p4]"\n' >> /tmp/managed_components.yml
+            # Insert before 'idf:' line
             sed -i '/^  idf:/e cat /tmp/managed_components.yml' ports/esp32/main/idf_component.yml
             echo "✅ Added managed components to idf_component.yml"
             
