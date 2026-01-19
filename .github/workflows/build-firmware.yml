@@ -104,29 +104,6 @@ jobs:
               touch "$MSPI_DIR/.gitkeep"
             fi
             
-            # Apply modifications directly (more reliable than patches with context mismatches)
-            echo "🔧 Adding pyDirect dependencies to MicroPython..."
-            
-            # Add HTTP server components to esp32_common.cmake (patch 001 replacement)
-            # Using Python for 100% reliable in-place editing
-            python3 -c "import fileinput, sys; [sys.stdout.write(line.replace('    esp_event', '    esp_event\n    esp_http_server\n    esp_https_server')) for line in fileinput.input('ports/esp32/esp32_common.cmake', inplace=True)]"
-            echo "✅ Added esp_http_server/esp_https_server to IDF components"
-            
-            # Add managed components to idf_component.yml (patch 002 replacement)
-            # Use printf for multi-line content (heredoc breaks YAML)
-            printf '  # pyDirect dependencies\n' > /tmp/managed_components.yml
-            printf '  joltwallet/littlefs: "^1.0.0"\n' >> /tmp/managed_components.yml
-            printf '  husarnet/esp_husarnet: "^0.0.15"\n' >> /tmp/managed_components.yml
-            printf '  espressif/cbor: "^0.6.0"\n' >> /tmp/managed_components.yml
-            printf '  espressif/esp_peer: "^1.2.2"\n' >> /tmp/managed_components.yml
-            printf '  espressif/iot_usbh_modem:\n' >> /tmp/managed_components.yml
-            printf '    version: "^2.0.0"\n' >> /tmp/managed_components.yml
-            printf '    rules:\n' >> /tmp/managed_components.yml
-            printf '      - if: "target in [esp32s2, esp32s3, esp32p4]"\n' >> /tmp/managed_components.yml
-            # Insert before 'idf:' line (using Python for reliability across environments)
-            python3 -c "import fileinput, sys; c=open('/tmp/managed_components.yml').read(); [sys.stdout.write(c + line) if line.startswith('  idf:') else sys.stdout.write(line) for line in fileinput.input('ports/esp32/main/idf_component.yml', inplace=True)]"
-            echo "✅ Added managed components to idf_component.yml"
-            
             # Build cross-compiler
             echo "🔨 Building mpy-cross..."
             make -C mpy-cross -j$(nproc)

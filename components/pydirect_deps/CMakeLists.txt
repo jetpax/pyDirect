@@ -1,0 +1,1 @@
+idf_component_register(REQUIRES esp_http_server esp_https_server)

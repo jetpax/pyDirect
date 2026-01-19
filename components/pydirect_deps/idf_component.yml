@@ -1,0 +1,10 @@
+dependencies:
+  # pyDirect dependencies
+  joltwallet/littlefs: "^1.0.0"
+  husarnet/esp_husarnet: "^0.0.15"
+  espressif/cbor: "^0.6.0"
+  espressif/esp_peer: "^1.2.2"
+  espressif/iot_usbh_modem:
+    version: "^2.0.0"
+    rules:
+      - if: "target in [esp32s2, esp32s3, esp32p4]"
