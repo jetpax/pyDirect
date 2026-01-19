@@ -10,6 +10,9 @@ This script:
 2. Starts HTTP server on port 80
 3. Starts WebREPL
 4. Enters main loop to process queues
+
+Copyright (c) 2025 Jonathan Peace
+SPDX-License-Identifier: MIT
 """
 
 import network
@@ -20,10 +23,6 @@ import webrepl_binary as webrepl
 # ============================================================================
 # Configuration
 # ============================================================================
-
-# WiFi Configuration (set to None to skip WiFi)
-WIFI_SSID = None  # "YOUR_SSID"
-WIFI_PASSWORD = None  # "YOUR_PASSWORD"
 
 # Server Configuration
 HTTP_PORT = 80
@@ -66,9 +65,23 @@ def start_ap_mode():
     print(f"Connect to '{ap_name}' and navigate to http://{ip}/")
     return ip
 
+def load_wifi_config():
+    """Load WiFi credentials from saved config file"""
+    try:
+        with open('/wifi_config.txt', 'r') as f:
+            lines = f.readlines()
+            if len(lines) >= 2:
+                return lines[0].strip(), lines[1].strip()
+    except:
+        pass
+    return None, None
+
 def connect_wifi():
     """Connect to WiFi if configured, otherwise start AP mode"""
-    if not WIFI_SSID:
+    # Try to load saved WiFi config
+    ssid, password = load_wifi_config()
+    
+    if not ssid:
         print("WiFi not configured - starting AP mode for onboarding")
         return start_ap_mode()
     
@@ -79,8 +92,8 @@ def connect_wifi():
         print(f"Already connected: {wlan.ifconfig()[0]}")
         return wlan.ifconfig()[0]
     
-    print(f"Connecting to WiFi: {WIFI_SSID}...")
-    wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+    print(f"Connecting to WiFi: {ssid}...")
+    wlan.connect(ssid, password)
     
     # Wait for connection (30 second timeout)
     timeout = 30
@@ -95,6 +108,7 @@ def connect_wifi():
     else:
         print("WiFi connection failed - starting AP mode")
         return start_ap_mode()
+
 
 # ============================================================================
 # Server Startup
@@ -137,6 +151,27 @@ def main():
     print("pyDirect - Minimal Device Orchestrator")
     print("=" * 60)
     print("")
+    
+    # Check for Improv WiFi provisioning mode
+    # Only run if WiFi is not configured
+    try:
+        import improv_serial
+        if not improv_serial.is_wifi_configured():
+            print("No WiFi configured - starting Improv provisioning...")
+            print("Use ESP Web Tools to configure WiFi via browser")
+            print("")
+            
+            # Try Improv provisioning (30 second timeout)
+            if improv_serial.start_listener(timeout=30):
+                print("WiFi provisioned via Improv!")
+            else:
+                print("Improv provisioning timeout - continuing with AP mode")
+            print("")
+    except ImportError:
+        pass  # improv_serial module not available
+    except Exception as e:
+        print(f"Improv error: {e}")
+
     
     # Connect to network
     ip = connect_wifi()
