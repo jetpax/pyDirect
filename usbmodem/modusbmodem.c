@@ -1,7 +1,7 @@
 /*
  * modusbmodem.c - MicroPython module for USB CDC modem communication
  *
- * Implementation using iot_usbh_modem for AT command and PPP functionality
+ * Implementation using iot_usbh_modem V2.0 for AT command and PPP functionality
  *
  * Copyright (c) 2025 Jonathan Peace
  * SPDX-License-Identifier: MIT
@@ -13,6 +13,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "esp_log.h"
 #include "esp_err.h"
@@ -25,17 +26,16 @@
 #include "lwip/ip_addr.h"
 #include "ping/ping_sock.h"
 
-// Include esp_modem headers
-#include "esp_modem.h"  // For ESP_MODEM_PPP_MODE enum
-#include "esp_modem_dce.h"
-#include "esp_modem_dce_common_commands.h"
-#include "usbh_modem_board.h"
+// V2.0 headers
+#include "iot_usbh_modem.h"
+#include "modem_at_parser.h"
+#include "at_3gpp_ts_27_007.h"
 
 static const char *TAG = "USBMODEM";
 
 // Global state
 static bool g_modem_initialized = false;
-static esp_modem_dce_t *g_modem_dce = NULL;
+static at_handle_t g_at_parser = NULL;
 static bool g_ppp_connected = false;
 static bool g_ppp_connecting = false;  // True when auto-connect enabled but not yet connected
 static esp_ip4_addr_t g_ppp_ip = {0};
@@ -55,10 +55,10 @@ static volatile bool g_ping_done = false;
 static volatile bool g_ping_success = false;
 static volatile uint32_t g_ping_time_ms = 0;
 
-// AT command response handler
-static esp_err_t at_response_handler(esp_modem_dce_t *dce, const char *line) {
+// AT command response handler - V2.0 signature returns bool
+static bool at_response_handler(at_handle_t at_handle, const char *line) {
     if (line == NULL) {
-        return ESP_OK;
+        return false;
     }
     
     // Collect response lines
@@ -70,7 +70,13 @@ static esp_err_t at_response_handler(esp_modem_dce_t *dce, const char *line) {
         g_at_response_buffer[g_at_response_len] = '\0';
     }
     
-    return esp_modem_dce_handle_response_default(dce, line);
+    // Check for final response markers
+    if (strstr(line, "OK") != NULL) return true;
+    if (strstr(line, "ERROR") != NULL) return true;
+    if (strstr(line, "+CME ERROR") != NULL) return true;
+    if (strstr(line, "+CMS ERROR") != NULL) return true;
+    
+    return false;  // Continue collecting lines
 }
 
 // Ping callbacks
@@ -101,36 +107,20 @@ static int rssi_to_dbm(int rssi) {
     return -999; // Unknown
 }
 
-// Modem event handler - tracks PPP connection state
-static void modem_event_handler(void *arg, esp_event_base_t event_base,
-                                int32_t event_id, void *event_data) {
-    if (event_base == MODEM_BOARD_EVENT) {
-        switch (event_id) {
-            case MODEM_EVENT_NET_CONN:
-                ESP_LOGI(TAG, "PPP Network connected");
-                g_ppp_connected = true;
-                g_ppp_connecting = false;
-                break;
-            case MODEM_EVENT_NET_DISCONN:
-                ESP_LOGW(TAG, "PPP Network disconnected");
-                g_ppp_connected = false;
-                g_ppp_connecting = false;
-                g_ppp_ip.addr = 0;
-                break;
-            case MODEM_EVENT_DTE_CONN:
-                ESP_LOGI(TAG, "USB DTE connected");
-                break;
-            case MODEM_EVENT_DTE_DISCONN:
-                ESP_LOGW(TAG, "USB DTE disconnected");
-                g_modem_dce = NULL;
-                break;
-            default:
-                break;
-        }
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_PPP_GOT_IP) {
+// IP event handler - tracks PPP connection state
+static void ip_event_handler(void *arg, esp_event_base_t event_base,
+                             int32_t event_id, void *event_data) {
+    if (event_base == IP_EVENT && event_id == IP_EVENT_PPP_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         g_ppp_ip = event->ip_info.ip;
+        g_ppp_connected = true;
+        g_ppp_connecting = false;
         ESP_LOGI(TAG, "PPP Got IP: " IPSTR, IP2STR(&g_ppp_ip));
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_PPP_LOST_IP) {
+        ESP_LOGW(TAG, "PPP Lost IP");
+        g_ppp_connected = false;
+        g_ppp_connecting = false;
+        g_ppp_ip.addr = 0;
     }
 }
 
@@ -179,8 +169,26 @@ static mp_obj_t usbmodem_set_config(size_t n_args, const mp_obj_t *pos_args, mp_
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(usbmodem_set_config_obj, 0, usbmodem_set_config);
 
-// Static config - must persist because modem_board_init passes it to a background task
-static modem_config_t g_modem_config;
+// Modem ID list for SIM7600 (dual interface)
+static const usb_modem_id_t modem_id_list[] = {
+    {
+        .match_id = {
+            .match_flags = USB_DEVICE_ID_MATCH_VID_PID,
+            .idVendor = 0x1E0E,   // SIMCOM VID
+            .idProduct = 0x9001,  // SIM7600 PID
+        },
+        .modem_itf_num = 0x03,  // PPP data interface
+        .at_itf_num = 0x02,     // Secondary AT port
+        .name = "SIM7600",
+    },
+    // Terminator
+    {
+        .match_id = {0},
+        .modem_itf_num = -1,
+        .at_itf_num = -1,
+        .name = NULL,
+    }
+};
 
 // Python: usbmodem.init()
 static mp_obj_t usbmodem_init(void) {
@@ -189,39 +197,44 @@ static mp_obj_t usbmodem_init(void) {
         return mp_const_true;
     }
     
-    ESP_LOGI(TAG, "Initializing USB modem");
+    ESP_LOGI(TAG, "Initializing USB modem (V2.0 API)");
     
     // Register for IP events to track PPP connection
-    esp_event_handler_register(IP_EVENT, IP_EVENT_PPP_GOT_IP, modem_event_handler, NULL);
+    esp_event_handler_register(IP_EVENT, IP_EVENT_PPP_GOT_IP, ip_event_handler, NULL);
+    esp_event_handler_register(IP_EVENT, IP_EVENT_PPP_LOST_IP, ip_event_handler, NULL);
     
-    // Configure modem board - non-blocking, don't auto-enter PPP
-    // IMPORTANT: Config must be static because modem_board_init passes pointer to daemon task
-    g_modem_config = (modem_config_t)MODEM_DEFAULT_CONFIG();
-    g_modem_config.flags |= MODEM_FLAGS_INIT_NOT_ENTER_PPP;
-    g_modem_config.flags |= MODEM_FLAGS_INIT_NOT_BLOCK;
-    g_modem_config.handler = modem_event_handler;  // Register for modem events
-    g_modem_config.handler_arg = NULL;
+    // Configure and install modem - V2.0 API
+    usbh_modem_config_t config = {
+        .modem_id_list = modem_id_list,
+        .at_tx_buffer_size = 1024,
+        .at_rx_buffer_size = 2048,
+    };
     
-    esp_err_t err = modem_board_init(&g_modem_config);
+    esp_err_t err = usbh_modem_install(&config);
     if (err != ESP_OK) {
         mp_raise_msg_varg(&mp_type_OSError, 
-            MP_ERROR_TEXT("Failed to initialize modem: %d"), err);
+            MP_ERROR_TEXT("Failed to install modem: %d"), err);
     }
     
-    // Get DCE handle for AT commands
-    g_modem_dce = modem_board_get_dce();
-    if (g_modem_dce == NULL) {
-        ESP_LOGW(TAG, "DCE handle not available yet (modem may still be connecting)");
+    // Get AT parser handle for AT commands
+    g_at_parser = usbh_modem_get_atparser();
+    if (g_at_parser == NULL) {
+        ESP_LOGW(TAG, "AT parser not available yet (modem may still be connecting)");
     }
     
     // Set APN if runtime value provided
-    if (strlen(g_runtime_apn) > 0) {
-        modem_board_set_apn(g_runtime_apn, false);
+    if (strlen(g_runtime_apn) > 0 && g_at_parser != NULL) {
+        esp_modem_at_pdp_t pdp = {
+            .cid = 1,
+            .type = "IP",
+            .apn = g_runtime_apn,
+        };
+        at_cmd_set_pdp_context(g_at_parser, &pdp);
         ESP_LOGI(TAG, "APN set to: %s", g_runtime_apn);
     }
     
-    // Disable auto-connect by default
-    modem_board_ppp_auto_connect(false);
+    // Disable auto-connect by default (user controls when to connect)
+    usbh_modem_ppp_auto_connect(false);
     
     g_modem_initialized = true;
     g_ppp_connected = false;
@@ -243,17 +256,18 @@ static mp_obj_t usbmodem_deinit(void) {
     
     // Disconnect PPP if connected or connecting
     if (g_ppp_connected || g_ppp_connecting) {
-        modem_board_ppp_auto_connect(false);
+        usbh_modem_ppp_auto_connect(false);
+        usbh_modem_ppp_stop();
         g_ppp_connected = false;
         g_ppp_connecting = false;
     }
     
-    esp_err_t err = modem_board_deinit();
+    esp_err_t err = usbh_modem_uninstall();
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to deinitialize modem: %d", err);
+        ESP_LOGW(TAG, "Failed to uninstall modem: %d", err);
     }
     
-    g_modem_dce = NULL;
+    g_at_parser = NULL;
     g_modem_initialized = false;
     
     return mp_const_none;
@@ -266,9 +280,9 @@ static mp_obj_t usbmodem_connected(void) {
         return mp_const_false;
     }
     
-    // Check if DCE handle is available (means USB DTE is connected)
-    esp_modem_dce_t *dce = modem_board_get_dce();
-    return dce != NULL ? mp_const_true : mp_const_false;
+    // Check if AT parser handle is available (means USB modem is connected)
+    at_handle_t parser = usbh_modem_get_atparser();
+    return parser != NULL ? mp_const_true : mp_const_false;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(usbmodem_connected_obj, usbmodem_connected);
 
@@ -279,58 +293,29 @@ static mp_obj_t usbmodem_send_at(mp_obj_t cmd_obj) {
             MP_ERROR_TEXT("Modem not initialized. Call usbmodem.init() first"));
     }
     
-    esp_modem_dce_t *dce = modem_board_get_dce();
-    if (dce == NULL) {
+    at_handle_t parser = usbh_modem_get_atparser();
+    if (parser == NULL) {
         mp_raise_msg(&mp_type_RuntimeError, 
             MP_ERROR_TEXT("Modem not connected. Check USB connection."));
     }
     
-    // If PPP is connecting/connected but DCE mode isn't PPP_MODE yet,
-    // wait briefly for mode transition (secondary port requires PPP_MODE)
-    if ((g_ppp_connected || g_ppp_connecting) && dce->mode != ESP_MODEM_PPP_MODE) {
-        // Wait up to 2 seconds for mode to transition
-        int wait_ms = 0;
-        while (dce->mode != ESP_MODEM_PPP_MODE && wait_ms < 2000) {
-            vTaskDelay(pdMS_TO_TICKS(100));
-            wait_ms += 100;
-        }
-        if (dce->mode != ESP_MODEM_PPP_MODE) {
-            ESP_LOGW(TAG, "PPP active but DCE mode not PPP_MODE (mode=%d), AT command may fail", dce->mode);
-        }
-    }
-    
     const char *cmd = mp_obj_str_get_str(cmd_obj);
-    
-    // Prepare AT command with \r\n terminator
-    char at_cmd[256];
-    size_t cmd_len = strlen(cmd);
-    
-    if (cmd_len >= sizeof(at_cmd) - 3) {
-        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("AT command too long"));
-    }
-    
-    if (cmd_len >= 2 && cmd[cmd_len-2] == '\r' && cmd[cmd_len-1] == '\n') {
-        strcpy(at_cmd, cmd);
-    } else {
-        snprintf(at_cmd, sizeof(at_cmd), "%s\r\n", cmd);
-    }
     
     // Clear response buffer
     g_at_response_len = 0;
     memset(g_at_response_buffer, 0, sizeof(g_at_response_buffer));
     
-    // Send command
-    esp_err_t err = esp_modem_dce_generic_command(
-        dce, at_cmd, CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT,
+    // Send command using V2.0 API
+    esp_err_t err = modem_at_send_command(
+        parser, cmd, CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT,
         at_response_handler, NULL
     );
     
     if (err != ESP_OK) {
-        // Provide more helpful error message
         if (g_ppp_connected || g_ppp_connecting) {
             mp_raise_msg_varg(&mp_type_OSError, 
-                MP_ERROR_TEXT("AT command failed (PPP active, mode=%d): %d. Secondary AT port may not be working."), 
-                dce->mode, err);
+                MP_ERROR_TEXT("AT command failed (PPP active): %d. Secondary AT port may not be working."), 
+                err);
         } else {
             mp_raise_msg_varg(&mp_type_OSError, 
                 MP_ERROR_TEXT("AT command failed: %d"), err);
@@ -363,9 +348,8 @@ static mp_obj_t usbmodem_ppp_connect(void) {
     // Mark as connecting
     g_ppp_connecting = true;
     
-    // Enable PPP auto-connect - the modem daemon will handle the connection
-    // Connection status tracked via event handler (g_ppp_connected flag)
-    modem_board_ppp_auto_connect(true);
+    // Enable PPP auto-connect - V2.0 API
+    usbh_modem_ppp_auto_connect(true);
     
     // Return immediately - caller should poll ppp_status() for connection state
     return mp_const_true;
@@ -384,7 +368,8 @@ static mp_obj_t usbmodem_ppp_disconnect(void) {
     }
     
     ESP_LOGI(TAG, "Disconnecting PPP...");
-    modem_board_ppp_auto_connect(false);
+    usbh_modem_ppp_auto_connect(false);
+    usbh_modem_ppp_stop();
     g_ppp_connected = false;
     g_ppp_connecting = false;
     
@@ -425,8 +410,8 @@ static mp_obj_t usbmodem_get_info(void) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not initialized"));
     }
     
-    esp_modem_dce_t *dce = modem_board_get_dce();
-    if (dce == NULL) {
+    at_handle_t parser = usbh_modem_get_atparser();
+    if (parser == NULL) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not connected"));
     }
     
@@ -435,7 +420,7 @@ static mp_obj_t usbmodem_get_info(void) {
     // Send ATI command
     g_at_response_len = 0;
     memset(g_at_response_buffer, 0, sizeof(g_at_response_buffer));
-    esp_err_t err = esp_modem_dce_generic_command(dce, "ATI\r\n", 
+    esp_err_t err = modem_at_send_command(parser, "ATI", 
         CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
     
     if (err == ESP_OK) {
@@ -491,15 +476,23 @@ static mp_obj_t usbmodem_get_signal(void) {
     
     mp_obj_t dict = mp_obj_new_dict(3);
     
-    // Use modem_board API - works even during PPP mode with secondary AT port
-    int rssi = 99, ber = 99;
-    esp_err_t err = modem_board_get_signal_quality(&rssi, &ber);
+    at_handle_t parser = usbh_modem_get_atparser();
+    if (parser == NULL) {
+        mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_rssi), mp_const_none);
+        mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_ber), mp_const_none);
+        mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_dbm), mp_const_none);
+        return dict;
+    }
+    
+    // Use V2.0 API - at_cmd_get_signal_quality
+    esp_modem_at_csq_t csq = {.rssi = 99, .ber = 99};
+    esp_err_t err = at_cmd_get_signal_quality(parser, &csq);
     
     if (err == ESP_OK) {
-        mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_rssi), mp_obj_new_int(rssi));
-        mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_ber), mp_obj_new_int(ber));
+        mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_rssi), mp_obj_new_int(csq.rssi));
+        mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_ber), mp_obj_new_int(csq.ber));
         
-        int dbm = rssi_to_dbm(rssi);
+        int dbm = rssi_to_dbm(csq.rssi);
         if (dbm != -999) {
             mp_obj_dict_store(dict, MP_OBJ_NEW_QSTR(MP_QSTR_dbm), mp_obj_new_int(dbm));
         } else {
@@ -521,15 +514,15 @@ static mp_obj_t usbmodem_get_firmware(void) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not initialized"));
     }
     
-    esp_modem_dce_t *dce = modem_board_get_dce();
-    if (dce == NULL) {
+    at_handle_t parser = usbh_modem_get_atparser();
+    if (parser == NULL) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not connected"));
     }
     
     // Send AT+CGMR command
     g_at_response_len = 0;
     memset(g_at_response_buffer, 0, sizeof(g_at_response_buffer));
-    esp_err_t err = esp_modem_dce_generic_command(dce, "AT+CGMR\r\n", 
+    esp_err_t err = modem_at_send_command(parser, "AT+CGMR", 
         CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
     
     if (err == ESP_OK) {
@@ -665,17 +658,17 @@ static mp_obj_t usbmodem_gps_enable(size_t n_args, const mp_obj_t *pos_args, mp_
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not initialized"));
     }
     
-    esp_modem_dce_t *dce = modem_board_get_dce();
-    if (dce == NULL) {
+    at_handle_t parser = usbh_modem_get_atparser();
+    if (parser == NULL) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not connected"));
     }
     
     char cmd[32];
-    snprintf(cmd, sizeof(cmd), "AT+CGPS=%ld\r\n", (long)args[ARG_mode].u_int);
+    snprintf(cmd, sizeof(cmd), "AT+CGPS=%ld", (long)args[ARG_mode].u_int);
     
     g_at_response_len = 0;
     memset(g_at_response_buffer, 0, sizeof(g_at_response_buffer));
-    esp_err_t err = esp_modem_dce_generic_command(dce, cmd, CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
+    esp_err_t err = modem_at_send_command(parser, cmd, CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
     
     if (err != ESP_OK) {
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Failed to enable GPS"));
@@ -691,14 +684,14 @@ static mp_obj_t usbmodem_gps_disable(void) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not initialized"));
     }
     
-    esp_modem_dce_t *dce = modem_board_get_dce();
-    if (dce == NULL) {
+    at_handle_t parser = usbh_modem_get_atparser();
+    if (parser == NULL) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not connected"));
     }
     
     g_at_response_len = 0;
     memset(g_at_response_buffer, 0, sizeof(g_at_response_buffer));
-    esp_err_t err = esp_modem_dce_generic_command(dce, "AT+CGPS=0\r\n", CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
+    esp_err_t err = modem_at_send_command(parser, "AT+CGPS=0", CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
     
     if (err != ESP_OK) {
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Failed to disable GPS"));
@@ -714,14 +707,14 @@ static mp_obj_t usbmodem_gps_info(void) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not initialized"));
     }
     
-    esp_modem_dce_t *dce = modem_board_get_dce();
-    if (dce == NULL) {
+    at_handle_t parser = usbh_modem_get_atparser();
+    if (parser == NULL) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Modem not connected"));
     }
     
     g_at_response_len = 0;
     memset(g_at_response_buffer, 0, sizeof(g_at_response_buffer));
-    esp_err_t err = esp_modem_dce_generic_command(dce, "AT+CGPSINFO\r\n", CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
+    esp_err_t err = modem_at_send_command(parser, "AT+CGPSINFO", CONFIG_MODEM_COMMAND_TIMEOUT_DEFAULT, at_response_handler, NULL);
     
     if (err != ESP_OK) {
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Failed to get GPS info"));
