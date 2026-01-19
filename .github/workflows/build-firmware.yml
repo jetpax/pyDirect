@@ -108,8 +108,8 @@ jobs:
             echo "🔧 Adding pyDirect dependencies to MicroPython..."
             
             # Add HTTP server components to esp32_common.cmake (patch 001 replacement)
-            # Using Perl for reliable newline handling (sed has portability issues)
-            perl -i -pe 's/(    esp_event)$/$1\n    esp_http_server\n    esp_https_server/' ports/esp32/esp32_common.cmake
+            # Using Perl for reliable newline handling - no capture groups to avoid shell issues
+            perl -i -pe 's/    esp_event$/    esp_event\n    esp_http_server\n    esp_https_server/' ports/esp32/esp32_common.cmake
             echo "✅ Added esp_http_server/esp_https_server to IDF components"
             
             # Add managed components to idf_component.yml (patch 002 replacement)
