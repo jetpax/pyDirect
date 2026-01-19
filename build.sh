@@ -259,7 +259,6 @@ echo ""
 echo -e "${GREEN}⚙️  Configuring CMake...${NC}"
 cmake "${CMAKE_OPTS[@]}" \
     -DUSER_C_MODULES="$PYDIRECT_DIR/micropython.cmake" \
-    -DEXTRA_COMPONENT_DIRS="$PYDIRECT_DIR/components/pydirect_deps" \
     -S . -B "build-${BOARD}"
 
 echo -e "${GREEN}🔨 Building firmware...${NC}"

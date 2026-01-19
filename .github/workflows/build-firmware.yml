@@ -118,6 +118,11 @@ jobs:
             export MPY_DIR=$(pwd)/../micropython
             export ESP_IDF_PATH=/opt/esp/idf
             
+            echo "🔧 Injecting dependencies into MicroPython tree (CI-only hack)..."
+            # Modify MicroPython source tree to match local dev environment
+            # This ensures idf_component.yml has all our managed components
+            python3 tools/ci_update_dependencies.py "$MPY_DIR/ports/esp32/main/idf_component.yml" "$MPY_DIR/ports/esp32/esp32_common.cmake"
+            
             echo "🔨 Building firmware for ${{ matrix.board }}..."
             echo "  PYDIRECT_DIR: $PYDIRECT_DIR"
             echo "  MPY_DIR: $MPY_DIR"
