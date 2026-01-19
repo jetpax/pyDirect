@@ -71,7 +71,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        board: [ESP32_S3_N8R2, SCRIPTO_P4]
+        include:
+          - board: ESP32_S3_N8R2
+            target: esp32s3
+          - board: SCRIPTO_P4
+            target: esp32p4
       fail-fast: false
     
     steps:
@@ -84,7 +88,7 @@ jobs:
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: ${{ env.ESP_IDF_VERSION }}
-          target: esp32s3
+          target: ${{ matrix.target }}
           path: '.'
           command: |
             set -e
