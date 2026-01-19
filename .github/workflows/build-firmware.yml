@@ -108,9 +108,8 @@ jobs:
             echo "🔧 Adding pyDirect dependencies to MicroPython..."
             
             # Add HTTP server components to esp32_common.cmake (patch 001 replacement)
-            # Using printf with sed for proper newline handling
-            sed -i '/esp_event$/a\    esp_http_server' ports/esp32/esp32_common.cmake
-            sed -i '/esp_http_server$/a\    esp_https_server' ports/esp32/esp32_common.cmake
+            # Using sed substitution (append command 'a' has portability issues)
+            sed -i 's/    esp_event$/    esp_event\n    esp_http_server\n    esp_https_server/' ports/esp32/esp32_common.cmake
             echo "✅ Added esp_http_server/esp_https_server to IDF components"
             
             # Add managed components to idf_component.yml (patch 002 replacement)
