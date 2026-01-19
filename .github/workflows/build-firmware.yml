@@ -104,18 +104,17 @@ jobs:
               touch "$MSPI_DIR/.gitkeep"
             fi
             
-            # Apply patches
-            echo "🔧 Applying pyDirect patches..."
-            for patch in ../pyDirect/docs/patches/*.patch; do
-              if git apply --check "$patch" 2>/dev/null; then
-                git apply "$patch"
-                echo "✅ Applied $(basename $patch)"
-              else
-                echo "⚠️ Patch $(basename $patch) skipped"
-              fi
-            done
+            # Apply modifications directly (more reliable than patches with context mismatches)
+            echo "🔧 Adding pyDirect dependencies to MicroPython..."
             
-            # Note: patch 002 adds the HTTP server components, so manual fallback skipped
+            # Add HTTP server components to esp32_common.cmake (patch 001 replacement)
+            sed -i '/esp_event$/a\    esp_http_server\n    esp_https_server' ports/esp32/esp32_common.cmake
+            echo "✅ Added esp_http_server/esp_https_server to IDF components"
+            
+            # Add managed components to idf_component.yml (patch 002 replacement)
+            # Insert before the 'idf:' line
+            sed -i '/^  idf:/i\  # pyDirect dependencies\n  joltwallet/littlefs: "^1.0.0"\n  husarnet/esp_husarnet: "^0.0.15"\n  espressif/cbor: "^0.6.0"\n  espressif/esp_peer: "^1.2.2"\n  espressif/iot_usbh_modem:\n    version: "^2.0.0"\n    rules:\n      - if: "target in [esp32s2, esp32s3, esp32p4]"' ports/esp32/main/idf_component.yml
+            echo "✅ Added managed components to idf_component.yml"
             
             # Build cross-compiler
             echo "🔨 Building mpy-cross..."
