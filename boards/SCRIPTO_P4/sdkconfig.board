@@ -2,7 +2,7 @@
 
 # Use custom partition table
 CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="/Users/jep/github/pyDirect/boards/SCRIPTO_P4/partitions-16mb.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/SCRIPTO_P4/partitions-16mb.csv"
 
 # Enable WebSocket support in HTTP server (required for wsserver module)
 CONFIG_HTTPD_WS_SUPPORT=y
