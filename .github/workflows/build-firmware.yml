@@ -283,5 +283,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .micropython-version
-          git commit -m "Track MicroPython ${{ needs.check-version.outputs.mpy_version }}"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Track MicroPython ${{ needs.check-version.outputs.mpy_version }}"
+            git push
+          fi
