@@ -108,8 +108,8 @@ jobs:
             echo "🔧 Adding pyDirect dependencies to MicroPython..."
             
             # Add HTTP server components to esp32_common.cmake (patch 001 replacement)
-            # Using Perl for reliable newline handling - no capture groups to avoid shell issues
-            perl -i -pe 's/    esp_event$/    esp_event\n    esp_http_server\n    esp_https_server/' ports/esp32/esp32_common.cmake
+            # Using Python for 100% reliable in-place editing
+            python3 -c "import fileinput, sys; [sys.stdout.write(line.replace('    esp_event', '    esp_event\n    esp_http_server\n    esp_https_server')) for line in fileinput.input('ports/esp32/esp32_common.cmake', inplace=True)]"
             echo "✅ Added esp_http_server/esp_https_server to IDF components"
             
             # Add managed components to idf_component.yml (patch 002 replacement)
@@ -123,8 +123,8 @@ jobs:
             printf '    version: "^2.0.0"\n' >> /tmp/managed_components.yml
             printf '    rules:\n' >> /tmp/managed_components.yml
             printf '      - if: "target in [esp32s2, esp32s3, esp32p4]"\n' >> /tmp/managed_components.yml
-            # Insert before 'idf:' line
-            sed -i '/^  idf:/e cat /tmp/managed_components.yml' ports/esp32/main/idf_component.yml
+            # Insert before 'idf:' line (using Python for reliability across environments)
+            python3 -c "import fileinput, sys; c=open('/tmp/managed_components.yml').read(); [sys.stdout.write(c + line) if line.startswith('  idf:') else sys.stdout.write(line) for line in fileinput.input('ports/esp32/main/idf_component.yml', inplace=True)]"
             echo "✅ Added managed components to idf_component.yml"
             
             # Build cross-compiler
