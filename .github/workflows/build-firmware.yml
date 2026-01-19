@@ -135,9 +135,14 @@ jobs:
             echo "  PYDIRECT_DIR: $PYDIRECT_DIR"
             echo "  MPY_DIR: $MPY_DIR"
             
-            # Note: usbmodem excluded from CI - requires esp-iot-solution API update
-            # TODO: Fix modem_board_get_dce() return type compatibility
-            ./build.sh ${{ matrix.board }} all -usbmodem
+            # Clone esp-iot-solution from jetpax fork (has correct iot_usbh_modem API)
+            echo "📦 Cloning esp-iot-solution from jetpax fork..."
+            git clone --depth 1 https://github.com/jetpax/esp-iot-solution ../esp-iot-solution
+            export ESP_IOT_SOLUTION_DIR=$(pwd)/../esp-iot-solution
+            echo "  ESP_IOT_SOLUTION_DIR: $ESP_IOT_SOLUTION_DIR"
+            
+            # Build with all modules including usbmodem
+            ./build.sh ${{ matrix.board }} all
             
             # Install mklittlefs for VFS partition creation
             echo "📦 Installing mklittlefs..."
