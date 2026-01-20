@@ -152,27 +152,6 @@ def main():
     print("=" * 60)
     print("")
     
-    # Check for Improv WiFi provisioning mode
-    # Only run if WiFi is not configured
-    try:
-        import improv_serial
-        if not improv_serial.is_wifi_configured():
-            print("No WiFi configured - starting Improv provisioning...")
-            print("Use ESP Web Tools to configure WiFi via browser")
-            print("")
-            
-            # Try Improv provisioning (30 second timeout)
-            if improv_serial.start_listener(timeout=30):
-                print("WiFi provisioned via Improv!")
-            else:
-                print("Improv provisioning timeout - continuing with AP mode")
-            print("")
-    except ImportError:
-        pass  # improv_serial module not available
-    except Exception as e:
-        print(f"Improv error: {e}")
-
-    
     # Connect to network
     ip = connect_wifi()
     
@@ -200,9 +179,11 @@ def main():
     print("")
     
     # Main loop - process queues
-    print("Entering main loop (Ctrl+C to exit)...")
+    print("Entering main loop (Ctrl+C to exit)...") 
+    
     try:
         while True:
+            # Process HTTP and WebREPL queues
             httpserver.process_queue()
             webrepl.process_queue()
             time.sleep_ms(10)
