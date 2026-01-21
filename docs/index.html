@@ -5,7 +5,6 @@
   <title>pyDirect Firmware Installer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Flash pyDirect MicroPython firmware to your ESP32 board with one click" />
-  <script type="module" src="https://unpkg.com/esp-web-tools@latest/dist/web/install-button.js?module"></script>
   <style>
     :root {
       --primary: #6366f1;
@@ -325,6 +324,44 @@
 
   <script type="module">
     import { ESPLoader } from './assets/libs/tasmota-esptool-v7-real.bundle.js';
+    import forge from 'https://esm.sh/node-forge@1.3.1';
+
+    // Generate self-signed certificate for device HTTPS
+    function generateSelfSignedCert(hostname, validityYears = 10) {
+      const keys = forge.pki.rsa.generateKeyPair(2048);
+      const cert = forge.pki.createCertificate();
+      
+      cert.publicKey = keys.publicKey;
+      cert.serialNumber = '01';
+      cert.validity.notBefore = new Date();
+      cert.validity.notAfter = new Date();
+      cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + validityYears);
+      
+      const attrs = [{ name: 'commonName', value: hostname }];
+      cert.setSubject(attrs);
+      cert.setIssuer(attrs);
+      
+      // Add Subject Alternative Names for hostname.local and wildcard
+      cert.setExtensions([
+        { name: 'basicConstraints', cA: false },
+        { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
+        { name: 'extKeyUsage', serverAuth: true },
+        {
+          name: 'subjectAltName',
+          altNames: [
+            { type: 2, value: hostname },           // DNS
+            { type: 2, value: `*.${hostname}` }     // Wildcard
+          ]
+        }
+      ]);
+      
+      cert.sign(keys.privateKey, forge.md.sha256.create());
+      
+      return {
+        certPem: forge.pki.certificateToPem(cert),
+        keyPem: forge.pki.privateKeyToPem(keys.privateKey)
+      };
+    }
 
     const deviceInfo = document.getElementById('deviceInfo');
     const firmwareInfo = document.getElementById('firmwareInfo');
@@ -341,6 +378,7 @@
     let currentPort = null;
     let currentLoader = null;
     let detectedChipName = null;
+    let detectedMacAddress = null;
 
     // Chip-specific eFuse base addresses (from tasmota-webserial-esptool v7.3.4)
     const EFUSE_BASES = {
@@ -517,6 +555,7 @@
         // Perform detection
         const result = await detectHardware(currentPort);
         detectedChipName = result.chipName;
+        detectedMacAddress = result.macAddress;
 
         // Update button and show flash button
         connectBtn.textContent = '✓ Connected';
@@ -609,6 +648,44 @@
         try { writer.releaseLock(); } catch {}
         throw e;
       }
+    }
+
+    // Upload certificates to device filesystem via REPL
+    async function uploadCertsToDevice(port, certPem, keyPem, addDebugLog) {
+      addDebugLog('> Creating /certs directory...');
+      
+      // Create /certs directory (ignore error if exists)
+      await sendREPLCommand(port, `
+import os
+try:
+    os.mkdir('/certs')
+except OSError:
+    pass
+print('DIR_OK')
+`, 3000, false);
+
+      addDebugLog('> Writing certificate...');
+      
+      // Write cert file using base64 to handle special characters
+      const certB64 = btoa(certPem);
+      await sendREPLCommand(port, `
+import binascii
+with open('/certs/servercert.pem', 'wb') as f:
+    f.write(binascii.a2b_base64('${certB64}'))
+print('CERT_OK')
+`, 5000, false);
+
+      addDebugLog('> Writing private key...');
+      
+      // Write key file
+      const keyB64 = btoa(keyPem);
+      await sendREPLCommand(port, `
+with open('/certs/prvtkey.pem', 'wb') as f:
+    f.write(binascii.a2b_base64('${keyB64}'))
+print('KEY_OK')
+`, 5000, false);
+
+      addDebugLog('> Certificates installed!');
     }
 
     // Wire up the REPL WiFi setup button
@@ -801,10 +878,37 @@ else:
           }
         }
         
-        wifiSetupBtn.textContent = '✓ WiFi Configured!';
+        // Generate and install HTTPS certificate
+        wifiSetupBtn.textContent = 'Generating certificate...';
+        addDebugLog('> Generating HTTPS certificate...');
+        
+        // Build hostname from MAC address (scripto-XXXX.local pattern)
+        const macSuffix = detectedMacAddress 
+          ? detectedMacAddress.replace(/:/g, '').slice(-4).toLowerCase()
+          : 'xxxx';
+        const hostname = `scripto-${macSuffix}.local`;
+        addDebugLog(`> Hostname: ${hostname}`);
+        
+        // Generate self-signed certificate
+        const { certPem, keyPem } = generateSelfSignedCert(hostname);
+        addDebugLog(`> Certificate generated (${certPem.length} bytes)`);
+        
+        // Upload to device
+        wifiSetupBtn.textContent = 'Installing certificate...';
+        await uploadCertsToDevice(currentPort, certPem, keyPem, addDebugLog);
+        
+        wifiSetupBtn.textContent = '✓ WiFi + HTTPS Configured!';
         wifiSetupBtn.style.background = '#10b981';
         
-        alert(`WiFi Connected!\n\nDevice IP: ${deviceIP}\n\nYou can access it at: http://${deviceIP}/`);
+        alert(`Setup Complete!
+
+        Device IP: ${deviceIP}
+        Hostname: ${hostname}
+
+        HTTP:  http://${deviceIP}/
+        HTTPS: https://${hostname}/
+
+        Note: Accept the certificate warning on first HTTPS visit.`);  
         
         // Close port
         await currentPort.close();
