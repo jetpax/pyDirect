@@ -1,0 +1,111 @@
+name: Build VFS Partition
+
+on:
+  push:
+    paths:
+      - 'device-scripts/**'
+      - '.github/workflows/build-vfs.yml'
+  workflow_dispatch:
+
+jobs:
+  build-vfs:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        board: [SCRIPTO_S3, SCRIPTO_P4]
+    
+    steps:
+      - name: Checkout pyDirect
+        uses: actions/checkout@v4
+        with:
+          path: pyDirect
+      
+      - name: Checkout MicroPython
+        uses: actions/checkout@v4
+        with:
+          repository: micropython/micropython
+          ref: v1.27.0
+          path: micropython
+      
+      - name: Install mklittlefs
+        run: |
+          wget https://github.com/earlephilhower/mklittlefs/releases/download/3.2.0/x86_64-linux-gnu-mklittlefs-295fe9b.tar.gz
+          tar -xzf x86_64-linux-gnu-mklittlefs-295fe9b.tar.gz
+          sudo mv mklittlefs /usr/local/bin/
+          sudo chmod +x /usr/local/bin/mklittlefs
+      
+      - name: Download existing firmware artifacts
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build-firmware.yml
+          name: firmware-${{ matrix.board }}
+          path: micropython/ports/esp32/build-${{ matrix.board }}
+          if_no_artifact_found: warn
+      
+      - name: Build VFS partition
+        run: |
+          cd pyDirect
+          BOARD=${{ matrix.board }} MPY_DIR=../micropython ./build-vfs.sh
+      
+      - name: Rebuild merged firmware
+        run: |
+          cd pyDirect
+          # Install esptool
+          pip install esptool
+          
+          # Run just the merge part from build.sh
+          BOARD=${{ matrix.board }}
+          MPY_DIR=../micropython
+          BUILD_DIR="${MPY_DIR}/ports/esp32/build-${BOARD}"
+          BOARD_DIR="./boards/${BOARD}"
+          
+          # Get partition info
+          PARTITION_FILE=$(find "${BOARD_DIR}" -name "partitions*.csv" | head -1)
+          VFS_LINE=$(grep "^vfs," "$PARTITION_FILE")
+          VFS_OFFSET=$(echo "$VFS_LINE" | cut -d',' -f4 | xargs)
+          
+          # Detect chip type
+          CHIP="esp32s3"
+          if [[ "$BOARD" == *"P4"* ]]; then
+            CHIP="esp32p4"
+          fi
+          
+          # Get flash size
+          FLASH_SIZE="8MB"
+          if [ -f "${BOARD_DIR}/sdkconfig.board" ]; then
+            if grep -q "CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y" "${BOARD_DIR}/sdkconfig.board"; then
+              FLASH_SIZE="16MB"
+            fi
+          fi
+          
+          # Merge firmware
+          esptool.py --chip "$CHIP" merge_bin \
+            --fill-flash-size "$FLASH_SIZE" \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size "$FLASH_SIZE" \
+            -o "${BUILD_DIR}/pyDirect-${BOARD}-merged.bin" \
+            0x0 "${BUILD_DIR}/bootloader/bootloader.bin" \
+            0x8000 "${BUILD_DIR}/partition_table/partition-table.bin" \
+            0x10000 "${BUILD_DIR}/micropython.bin" \
+            $VFS_OFFSET "${BUILD_DIR}/vfs.bin"
+      
+      - name: Upload VFS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vfs-${{ matrix.board }}
+          path: micropython/ports/esp32/build-${{ matrix.board }}/vfs.bin
+      
+      - name: Upload merged firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-merged-${{ matrix.board }}
+          path: micropython/ports/esp32/build-${{ matrix.board }}/pyDirect-${{ matrix.board }}-merged.bin
+      
+      - name: Update web flasher manifest
+        if: matrix.board == 'SCRIPTO_S3'
+        run: |
+          cd pyDirect/docs
+          # Update manifest.json with new firmware
+          # This would need the actual manifest update logic
+          echo "TODO: Update manifest.json"

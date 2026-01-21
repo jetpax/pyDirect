@@ -177,6 +177,16 @@ jobs:
           name: pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}
           path: artifacts/*
           retention-days: 90
+      
+      - name: Upload firmware components (for VFS rebuild)
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.board }}
+          path: |
+            micropython/ports/esp32/build-${{ matrix.board }}/bootloader/bootloader.bin
+            micropython/ports/esp32/build-${{ matrix.board }}/partition_table/partition-table.bin
+            micropython/ports/esp32/build-${{ matrix.board }}/micropython.bin
+          retention-days: 90
 
   create-release:
     name: Create GitHub Release
