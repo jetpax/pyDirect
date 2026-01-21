@@ -1,0 +1,52 @@
+"""
+Network module - unified interface for WiFi, Ethernet, and WWAN.
+
+Provides network initialization, monitoring, and task management.
+
+Usage:
+    from lib import network
+    
+    # Start all network tasks and wait for connection
+    await network.startup()
+    
+    # Or use individual interfaces
+    network.wifi.init()
+    network.eth.init()
+    network.wwan.init()
+"""
+
+import asyncio
+
+# Shared network ready event - set by any network task when IP obtained
+network_ready = asyncio.Event()
+
+def _set_network_ready(source, ip, hostname=None):
+    """Helper to set network_ready event and log connection"""
+    if not network_ready.is_set():
+        network_ready.set()
+        print(f"[INFO] Network ready via {source}: {ip}")
+        if hostname:
+            print(f"[INFO] mDNS hostname: {hostname}.local")
+
+async def startup():
+    """Start all network tasks and wait for any connection"""
+    from lib.sys import bg_tasks
+    
+    print("[INFO] Starting network tasks...")
+    
+    # Start all network tasks in parallel
+    bg_tasks.start("wifi_task", wifi.task, is_system=True)
+    bg_tasks.start("eth_task", eth.task, is_system=True)
+    bg_tasks.start("wwan_task", wwan.task, is_system=True)
+    
+    print("[INFO] Waiting for network connection...")
+    
+    # Wait for any network interface to get an IP
+    await network_ready.wait()
+    
+    print("[INFO] Network connection established")
+
+# Import submodules (after function definitions to avoid circular imports)
+from lib.sys.network import wifi, eth, wwan
+
+__all__ = ['wifi', 'eth', 'wwan', 'network_ready', 'startup', '_set_network_ready']

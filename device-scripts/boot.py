@@ -1,16 +1,20 @@
-# boot.py - Minimal boot configuration for pyDirect
-# This file runs on every boot (including wake-boot from deepsleep)
+"""
+boot.py - Boot Initialization
+==============================
 
+Initializes the status LED at boot time.
+
+This file runs automatically on boot.
+
+Copyright (c) 2026 Jonathan Peace
+SPDX-License-Identifier: MIT
+"""
+
+print("System booting...")
 import esp
-esp.osdebug(None)  # Disable vendor O/S debugging messages
+esp.osdebug(esp.LOG_INFO)  # or esp.LOG_DEBUG for more verbose
 
-# Optional: Disable WiFi on boot (save power if using Ethernet)
-# import network
-# network.WLAN(network.STA_IF).active(False)
-# network.WLAN(network.AP_IF).active(False)
+# Initialize status LED (singleton - safe to call multiple times)
+from lib.sys.status_led import init_status_led, status_led
 
-# Optional: Set CPU frequency
-# import machine
-# machine.freq(240000000)  # 240MHz
-
-print("pyDirect boot complete")
+init_status_led()

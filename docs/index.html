@@ -309,6 +309,43 @@
       color: #00ff00;
     "></div>
     
+    <!-- WiFi Network Selection Modal -->
+    <div id="wifiModal" style="
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    ">
+      <div style="
+        background: var(--card-bg);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        max-width: 400px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+      ">
+        <h3 style="margin: 0 0 1rem 0; color: white;">📡 Select WiFi Network</h3>
+        <div id="wifiNetworkList"></div>
+        <button id="wifiCancelBtn" style="
+          width: 100%;
+          margin-top: 1rem;
+          padding: 0.75rem;
+          background: #374151;
+          color: white;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+        ">Cancel</button>
+      </div>
+    </div>
+    
     <p class="requirements">
       Requires Chrome, Edge, or Opera on desktop.<br>
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API#browser_compatibility" target="_blank">Browser compatibility</a>
@@ -745,9 +782,9 @@ print('KEY_OK')
           if (done) break;
           if (value) {
             bootOutput += bootDecoder.decode(value);
-            // Look for the pyDirect banner (Orchestrator is unique to the banner)
-            if (bootOutput.includes('Orchestrator')) {
-              addDebugLog('> Banner detected!');
+            // Look for the pyDirect banner 
+            if (bootOutput.includes('System booting...')) {
+              addDebugLog('> System booting... detected!');
               bannerFound = true;
               break;
             }
@@ -773,7 +810,7 @@ print('KEY_OK')
         
         // Scan networks via REPL - output as JSON for easy parsing
         const scanOutput = await sendREPLCommand(currentPort, `
-import network
+import network  # MicroPython built-in (has WLAN)
 import json
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
@@ -814,21 +851,70 @@ print("JSON:" + json.dumps(result))
         // Network selection and connection loop (allows retry on failure)
         let connected = false;
         let deviceIP = null;
+        let savedHostname = null;
+        
+        // Helper to show network selection modal
+        function showNetworkModal(networks) {
+          return new Promise((resolve, reject) => {
+            const modal = document.getElementById('wifiModal');
+            const list = document.getElementById('wifiNetworkList');
+            const cancelBtn = document.getElementById('wifiCancelBtn');
+            
+            // Build network list HTML
+            list.innerHTML = networks.map((n, i) => {
+              const bars = n.rssi >= -50 ? '▂▄▆█' : n.rssi >= -60 ? '▂▄▆_' : n.rssi >= -70 ? '▂▄__' : n.rssi >= -80 ? '▂___' : '▂___';
+              return `<button class="wifi-item" data-index="${i}" style="
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.75rem 1rem;
+                margin-bottom: 0.5rem;
+                background: #374151;
+                color: white;
+                border: 2px solid transparent;
+                border-radius: 0.5rem;
+                cursor: pointer;
+                transition: all 0.2s;
+              " onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='transparent'">
+                <span style="font-weight: 500;">${n.ssid}</span>
+                <span style="font-family: monospace; opacity: 0.7;">${n.sec ? '🔒 ' : ''}${bars}</span>
+              </button>`;
+            }).join('');
+            
+            // Show modal
+            modal.style.display = 'flex';
+            
+            // Handle network click
+            const handleClick = (e) => {
+              const btn = e.target.closest('.wifi-item');
+              if (btn) {
+                const index = parseInt(btn.dataset.index);
+                cleanup();
+                resolve(index);
+              }
+            };
+            
+            // Handle cancel
+            const handleCancel = () => {
+              cleanup();
+              reject(new Error('Setup cancelled'));
+            };
+            
+            const cleanup = () => {
+              modal.style.display = 'none';
+              list.removeEventListener('click', handleClick);
+              cancelBtn.removeEventListener('click', handleCancel);
+            };
+            
+            list.addEventListener('click', handleClick);
+            cancelBtn.addEventListener('click', handleCancel);
+          });
+        }
         
         while (!connected) {
-          // Show network selection
-          const networkList = networks.map((n, i) => `${i + 1}. ${n.ssid} (${n.rssi} dBm) ${n.sec ? '🔒' : ''}`).join('\n');
-          const selection = prompt(`Select WiFi network:\n\n${networkList}\n\nEnter number (1-${networks.length}), or Cancel to abort:`);
-          
-          if (!selection) {
-            throw new Error('Setup cancelled');
-          }
-          
-          const selectedIndex = parseInt(selection) - 1;
-          if (selectedIndex < 0 || selectedIndex >= networks.length) {
-            alert('Invalid selection. Please try again.');
-            continue;
-          }
+          // Show network selection modal
+          const selectedIndex = await showNetworkModal(networks);
           
           const selectedNetwork = networks[selectedIndex];
           const password = prompt(`Enter password for "${selectedNetwork.ssid}":`);
@@ -868,6 +954,29 @@ else:
             deviceIP = connMatch[1];
             connected = true;
             addDebugLog(`> Connected! IP: ${deviceIP}`);
+            
+            // Save WiFi credentials and hostname to settings
+            addDebugLog(`> Saving settings...`);
+            
+            // Compute hostname from ESPLoader MAC (base MAC - consistent across interfaces)
+            const macSuffix = detectedMacAddress 
+              ? detectedMacAddress.replace(/:/g, '').slice(-4).toLowerCase()
+              : 'xxxx';
+            const hostname = `pydirect-${macSuffix}`;
+            
+            await sendREPLCommand(currentPort, `
+from lib.sys import settings
+settings.set("wifi.ssid", "${selectedNetwork.ssid}")
+settings.set("wifi.password", "${password}")
+settings.set("server.https_enabled", True)
+settings.set("device.hostname", "${hostname}")
+settings.save()
+print("SETTINGS_OK")
+`, 5000, false);
+            addDebugLog(`> Settings saved (hostname: ${hostname})`);
+            
+            // Store for cert generation
+            savedHostname = hostname;
           } else {
             addDebugLog('> Connection failed');
             const retry = confirm('WiFi connection failed. Wrong password?\n\nClick OK to try again, or Cancel to abort.');
@@ -882,15 +991,12 @@ else:
         wifiSetupBtn.textContent = 'Generating certificate...';
         addDebugLog('> Generating HTTPS certificate...');
         
-        // Build hostname from MAC address (scripto-XXXX.local pattern)
-        const macSuffix = detectedMacAddress 
-          ? detectedMacAddress.replace(/:/g, '').slice(-4).toLowerCase()
-          : 'xxxx';
-        const hostname = `scripto-${macSuffix}.local`;
-        addDebugLog(`> Hostname: ${hostname}`);
+        // Use hostname saved to settings (from ESPLoader base MAC)
+        const certHostname = savedHostname + '.local';
+        addDebugLog(`> Hostname: ${certHostname}`);
         
         // Generate self-signed certificate
-        const { certPem, keyPem } = generateSelfSignedCert(hostname);
+        const { certPem, keyPem } = generateSelfSignedCert(certHostname);
         addDebugLog(`> Certificate generated (${certPem.length} bytes)`);
         
         // Upload to device
@@ -903,10 +1009,10 @@ else:
         alert(`Setup Complete!
 
         Device IP: ${deviceIP}
-        Hostname: ${hostname}
+        Hostname: ${certHostname}
 
         HTTP:  http://${deviceIP}/
-        HTTPS: https://${hostname}/
+        HTTPS: https://${certHostname}/
 
         Note: Accept the certificate warning on first HTTPS visit.`);  
         
