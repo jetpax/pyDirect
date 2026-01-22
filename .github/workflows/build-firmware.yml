@@ -100,12 +100,21 @@ jobs:
             cd micropython
             echo "✅ Cloned MicroPython ${{ needs.check-version.outputs.mpy_version }}"
             
-            # Update dependencies and apply workarounds using Python script
-            echo "📦 Injecting managed component dependencies and applying workarounds..."
+            # Apply ESP-IDF v5.5.1 workaround (inside Docker, IDF_PATH is /opt/esp/idf)
+            MSPI_DIR="/opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+            if [ -d "$MSPI_DIR" ]; then
+              echo "Applying ESP-IDF v5.5.1 workaround for mspi_timing_tuning..."
+              sed -i 's/#include "mspi_timing_tuning_configs.h"/#include "..\/mspi_timing_tuning_configs.h"/' \
+                /opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/mspi_timing_config.c
+              echo "✅ Workaround applied"
+            fi
+            
+            # Update dependencies using Python script
+            echo "📦 Injecting managed component dependencies..."
             python3 ../pyDirect/tools/ci_update_dependencies.py \
               ports/esp32/main/idf_component.yml \
               ports/esp32/esp32_common.cmake
-            echo "✅ Dependencies and workarounds applied"
+            echo "✅ Dependencies updated"
             
             # Build MicroPython cross-compiler
             echo "🔨 Building mpy-cross..."
@@ -115,10 +124,9 @@ jobs:
             # Build firmware
             cd ports/esp32
             echo "🔨 Building ${{ matrix.board }} firmware..."
-            # Use relative path from micropython/ports/esp32 - pyDirect is at ../../pyDirect
-            MICROPY_BOARD_DIR=../../../pyDirect/boards/${{ matrix.board }} \
+            MICROPY_BOARD_DIR=$GITHUB_WORKSPACE/pyDirect/boards/${{ matrix.board }} \
             BOARD=${{ matrix.board }} \
-            bash ../../../pyDirect/build.sh
+            bash $GITHUB_WORKSPACE/pyDirect/build.sh
             
             echo "✅ Build complete!"
             ls -lh build-${{ matrix.board }}/*.bin
