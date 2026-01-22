@@ -115,10 +115,11 @@ jobs:
             # Build firmware
             cd ports/esp32
             echo "🔨 Building ${{ matrix.board }} firmware..."
+            # Use relative paths - from micropython/ports/esp32, pyDirect is at ../../../pyDirect
             MPY_DIR=$(pwd)/../.. \
-            MICROPY_BOARD_DIR=$GITHUB_WORKSPACE/pyDirect/boards/${{ matrix.board }} \
+            MICROPY_BOARD_DIR=../../../pyDirect/boards/${{ matrix.board }} \
             BOARD=${{ matrix.board }} \
-            bash $GITHUB_WORKSPACE/pyDirect/build.sh
+            bash ../../../pyDirect/build.sh
             
             echo "✅ Build complete!"
             ls -lh build-${{ matrix.board }}/*.bin
