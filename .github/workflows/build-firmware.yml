@@ -107,6 +107,11 @@ jobs:
               ports/esp32/esp32_common.cmake
             echo "✅ Patches and dependencies applied"
             
+            # Initialize submodules (required for berkeley-db, etc.)
+            echo "📦 Initializing submodules..."
+            make -C ports/esp32 BOARD=${{ matrix.board }} submodules
+            echo "✅ Submodules initialized"
+            
             # Build MicroPython cross-compiler
             echo "🔨 Building mpy-cross..."
             make -C mpy-cross
