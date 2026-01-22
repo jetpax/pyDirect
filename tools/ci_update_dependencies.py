@@ -64,6 +64,34 @@ def update_esp32_common_cmake(path):
     else:
         print("ℹ️  esp_http_server already present")
 
+def apply_mspi_workaround():
+    """Apply ESP-IDF v5.5.1 workaround for mspi_timing_tuning include path"""
+    mspi_file = "/opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/mspi_timing_config.c"
+    
+    if not os.path.exists(mspi_file):
+        print("ℹ️  mspi_timing_config.c not found (different IDF version?), skipping workaround")
+        return
+    
+    print(f"🔧 Applying ESP-IDF v5.5.1 mspi_timing_tuning workaround...")
+    try:
+        with open(mspi_file, 'r') as f:
+            content = f.read()
+        
+        old_include = '#include "mspi_timing_tuning_configs.h"'
+        new_include = '#include "../mspi_timing_tuning_configs.h"'
+        
+        if old_include in content:
+            content = content.replace(old_include, new_include)
+            with open(mspi_file, 'w') as f:
+                f.write(content)
+            print("✅ Applied mspi_timing_tuning include path workaround")
+        elif new_include in content:
+            print("ℹ️  mspi workaround already applied")
+        else:
+            print("⚠️  Could not find mspi include to patch")
+    except Exception as e:
+        print(f"⚠️  Could not apply mspi workaround: {e}")
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage: python3 ci_update_dependencies.py <idf_component.yml> <esp32_common.cmake>")
@@ -74,3 +102,5 @@ if __name__ == "__main__":
     
     update_idf_component_yml(idf_comp_path)
     update_esp32_common_cmake(cmake_path)
+    apply_mspi_workaround()
+
