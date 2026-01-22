@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        board: [SCRIPTO_S3, SCRIPTO_P4]
+        board: [ESP32_S3_N8R2, SCRIPTO_P4]
     
     steps:
       - name: Checkout pyDirect
@@ -103,7 +103,7 @@ jobs:
           path: micropython/ports/esp32/build-${{ matrix.board }}/pyDirect-${{ matrix.board }}-merged.bin
       
       - name: Update web flasher manifest
-        if: matrix.board == 'SCRIPTO_S3'
+        if: matrix.board == 'ESP32_S3_N8R2'
         run: |
           cd pyDirect/docs
           # Update manifest.json with new firmware
