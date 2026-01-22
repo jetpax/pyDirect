@@ -50,14 +50,21 @@ jobs:
       - name: Rebuild merged firmware
         run: |
           cd pyDirect
-          # Install esptool
-          pip install esptool
           
-          # Run just the merge part from build.sh
           BOARD=${{ matrix.board }}
           MPY_DIR=../micropython
           BUILD_DIR="${MPY_DIR}/ports/esp32/build-${BOARD}"
           BOARD_DIR="./boards/${BOARD}"
+          
+          # Check if firmware components exist (from artifact download)
+          if [ ! -f "${BUILD_DIR}/micropython.bin" ]; then
+            echo "⚠️ Firmware components not available - skipping merge"
+            echo "Run build-firmware.yml first to create firmware artifacts"
+            exit 0
+          fi
+          
+          # Install esptool
+          pip install esptool
           
           # Get partition info
           PARTITION_FILE=$(find "${BOARD_DIR}" -name "partitions*.csv" | head -1)

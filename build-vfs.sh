@@ -31,11 +31,10 @@ if ! command -v mklittlefs &> /dev/null; then
     exit 1
 fi
 
-# Check if build directory exists
+# Create build directory if it doesn't exist
 if [ ! -d "$BUILD_DIR" ]; then
-    echo -e "${RED}❌ Build directory not found: $BUILD_DIR${NC}"
-    echo "Run ./build.sh first to create the build directory"
-    exit 1
+    echo -e "${YELLOW}📁 Creating build directory: $BUILD_DIR${NC}"
+    mkdir -p "$BUILD_DIR"
 fi
 
 # Get partition info from partition table
