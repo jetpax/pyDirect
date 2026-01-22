@@ -116,7 +116,9 @@ jobs:
             cd ports/esp32
             echo "🔨 Building ${{ matrix.board }} firmware..."
             # Use relative paths - from micropython/ports/esp32, pyDirect is at ../../../pyDirect
+            # ESP-IDF is at /opt/esp/idf inside the Docker container
             MPY_DIR=$(pwd)/../.. \
+            ESP_IDF_PATH=/opt/esp/idf \
             MICROPY_BOARD_DIR=../../../pyDirect/boards/${{ matrix.board }} \
             BOARD=${{ matrix.board }} \
             bash ../../../pyDirect/build.sh
