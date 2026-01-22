@@ -1003,24 +1003,39 @@ print("SETTINGS_OK")
         wifiSetupBtn.textContent = 'Installing certificate...';
         await uploadCertsToDevice(currentPort, certPem, keyPem, addDebugLog);
         
-        wifiSetupBtn.textContent = '✓ WiFi + HTTPS Configured!';
-        wifiSetupBtn.style.background = '#10b981';
+        // === Set setup mode flag before reset ===
+        wifiSetupBtn.textContent = 'Configuring setup mode...';
+        addDebugLog('> Setting setup mode flag...');
+        await sendREPLCommand(currentPort, `
+from lib.sys import settings
+settings.set("setup_mode", True)
+settings.save()
+print("SETUP_MODE_SET")
+`, 5000, false);
         
-        alert(`Setup Complete!
-
-        Device IP: ${deviceIP}
-        Hostname: ${certHostname}
-
-        HTTP:  http://${deviceIP}/
-        HTTPS: https://${certHostname}/
-
-        Note: Accept the certificate warning on first HTTPS visit.`);  
+        // Hard reset to apply settings and enter setup mode
+        wifiSetupBtn.textContent = 'Restarting device...';
+        addDebugLog('> Resetting device...');
+        await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
         
-        // Close port
+        // Close port and redirect to device setup page
+        const setupUrl = `https://${certHostname}/setup`;
+        addDebugLog(`> Device will boot into setup mode`);
+        addDebugLog(`> Redirecting to ${setupUrl} in 5 seconds...`);
+        
         await currentPort.close();
         currentPort = null;
         
-        // Reset UI after delay
+        // Brief pause for device to boot, then redirect
+        wifiSetupBtn.textContent = '✓ Redirecting to device setup...';
+        wifiSetupBtn.style.background = '#10b981';
+        
+        setTimeout(() => {
+          window.location.href = setupUrl;
+        }, 5000); // 5 seconds for device to boot and start HTTPS
+        
+        // Note: The UI reset below won't run since we're redirecting,
+        // but keeping it for cases where redirect might fail
         setTimeout(() => {
           connectBtn.textContent = 'Connect & Install pyDirect';
           connectBtn.disabled = false;
@@ -1028,9 +1043,10 @@ print("SETTINGS_OK")
           flashBtn.style.display = 'none';
           wifiSetupBtn.style.display = 'none';
           wifiSetupBtn.style.background = '#8b5cf6';
-          wifiSetupBtn.textContent = '📡 Debug: WiFi Setup via REPL';
+          wifiSetupBtn.textContent = '📡 WiFi Setup';
           wifiSetupBtn.disabled = false;
-        }, 2000);
+        }, 10000);
+
 
       } catch (error) {
         console.error('WiFi setup error:', error);

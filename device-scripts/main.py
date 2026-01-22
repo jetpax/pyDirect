@@ -329,6 +329,21 @@ async def main_async():
 
 def main():
     """Main entry point - wraps async main"""
+    
+    # Check for setup mode (set during provisioning)
+    # If set, run the setup server instead of normal startup
+    try:
+        from lib.sys import settings
+        if settings.get("setup_mode"):
+            print("[MAIN] Setup mode detected, starting setup server...")
+            from lib.sys.setup_server import run_setup_server
+            run_setup_server()
+            # After setup completes (soft reset), this won't be reached
+            # But if setup_server returns (error case), continue to normal boot
+            print("[MAIN] Setup server returned, continuing to normal boot...")
+    except Exception as e:
+        print(f"[WARNING] Setup mode check failed: {e}")
+    
     # Enter async event loop
     # Loop handles KeyboardInterrupt by stopping user tasks and restarting
     while True:
