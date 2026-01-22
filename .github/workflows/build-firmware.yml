@@ -124,6 +124,7 @@ jobs:
             # Build firmware
             cd ports/esp32
             echo "🔨 Building ${{ matrix.board }} firmware..."
+            MPY_DIR=$(pwd)/../.. \
             MICROPY_BOARD_DIR=$GITHUB_WORKSPACE/pyDirect/boards/${{ matrix.board }} \
             BOARD=${{ matrix.board }} \
             bash $GITHUB_WORKSPACE/pyDirect/build.sh
