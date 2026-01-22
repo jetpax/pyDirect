@@ -30,7 +30,7 @@ jobs:
       - name: Install mklittlefs
         run: |
           wget https://github.com/earlephilhower/mklittlefs/releases/download/4.1.0/x86_64-linux-gnu-mklittlefs-42acb97.tar.gz
-          tar -xzf x86_64-linux-gnu-mklittlefs-42acb97.tar.gz
+          tar -xzf x86_64-linux-gnu-mklittlefs-42acb97.tar.gz --strip-components=1
           sudo mv mklittlefs /usr/local/bin/
           sudo chmod +x /usr/local/bin/mklittlefs
       
