@@ -441,28 +441,98 @@
     let detectedChipName = null;
     let detectedMacAddress = null;
     let selectedProduct = null;
+    let releaseInfo = null;  // Cache release info
 
-    // Product options per chip family
-    const PRODUCT_OPTIONS = {
-      'ESP32-S3': [
-        { id: 'ESP32_S3', name: 'Generic ESP32-S3 (8MB Flash)', firmware: 'firmware/pyDirect-ESP32_S3-merged.bin' },
-        { id: 'ESP32_S3_16MB', name: 'Generic ESP32-S3 (16MB Flash)', firmware: 'firmware/pyDirect-ESP32_S3_16MB-merged.bin' },
-        { id: 'RetroVMS_Mini', name: 'RetroVMS Mini', firmware: 'firmware/pyDirect-RetroVMS_Mini-merged.bin' }
-      ],
-      'ESP32-P4': [
-        { id: 'ESP32_P4', name: 'ESP32-P4 (with C6 WiFi)', firmware: 'firmware/pyDirect-ESP32_P4-merged.bin' }
-      ]
+    // GitHub repository for firmware releases
+    const GITHUB_REPO = 'jetpax/pyDirect';
+    const RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+
+    // Map chip targets to chip families (for matching detected chip to firmware)
+    const CHIP_TARGETS = {
+      'ESP32_S3': 'ESP32-S3',
+      'ESP32_P4': 'ESP32-P4',
+      'ESP32_S2': 'ESP32-S2',
+      'ESP32_C3': 'ESP32-C3',
+      'ESP32_C6': 'ESP32-C6',
+      'ESP32': 'ESP32'
     };
+
+    // Parse firmware assets from release to build product options
+    async function loadFirmwareOptions() {
+      try {
+        console.log('Fetching release info from:', RELEASES_API);
+        const resp = await fetch(RELEASES_API);
+        if (!resp.ok) throw new Error(`Failed to fetch release: ${resp.status}`);
+        
+        releaseInfo = await resp.json();
+        console.log('Latest release:', releaseInfo.tag_name);
+
+        // Find all merged firmware files
+        const firmwareAssets = releaseInfo.assets.filter(a => 
+          a.name.startsWith('pyDirect-') && a.name.endsWith('-merged.bin')
+        );
+
+        // Parse into product options grouped by chip family
+        const options = {};
+        for (const asset of firmwareAssets) {
+          // Parse: pyDirect-{product}-merged.bin
+          const match = asset.name.match(/^pyDirect-(.+)-merged\.bin$/);
+          if (!match) continue;
+          
+          const productId = match[1];  // e.g., "ESP32_S3", "ESP32_S3_16MB", "RetroVMS_Mini"
+          
+          // Determine chip family from product ID
+          let chipFamily = null;
+          for (const [target, family] of Object.entries(CHIP_TARGETS)) {
+            if (productId.startsWith(target) || productId.includes(target)) {
+              chipFamily = family;
+              break;
+            }
+          }
+          
+          // For products like RetroVMS_Mini, we need to check which chip they target
+          // If no chip family detected, default to ESP32-S3 (most common)
+          if (!chipFamily) {
+            // Could also check release notes or use a manifest, but for now assume S3
+            chipFamily = 'ESP32-S3';
+          }
+
+          if (!options[chipFamily]) options[chipFamily] = [];
+          
+          // Generate human-readable name
+          let name = productId.replace(/_/g, ' ').replace(/16MB/g, '16MB').replace(/8MB/g, '8MB');
+          if (productId === 'ESP32_S3') name = 'Generic ESP32-S3 (8MB Flash)';
+          else if (productId === 'ESP32_S3_16MB') name = 'Generic ESP32-S3 (16MB Flash)';
+          else if (productId === 'ESP32_P4') name = 'ESP32-P4 (with C6 WiFi)';
+          
+          options[chipFamily].push({
+            id: productId,
+            name: name,
+            asset: asset.name,
+            downloadUrl: asset.browser_download_url,
+            size: asset.size
+          });
+        }
+
+        console.log('Discovered firmware options:', options);
+        return options;
+      } catch (error) {
+        console.error('Failed to load firmware options:', error);
+        return null;
+      }
+    }
 
     // Update firmware display when product selection changes
     productDropdown.addEventListener('change', () => {
-      const chipFamily = detectedChipName?.includes('ESP32-S3') ? 'ESP32-S3' : 
-                        detectedChipName?.includes('ESP32-P4') ? 'ESP32-P4' : null;
-      if (chipFamily && PRODUCT_OPTIONS[chipFamily]) {
-        const product = PRODUCT_OPTIONS[chipFamily].find(p => p.id === productDropdown.value);
-        if (product) {
-          selectedProduct = product;
-          selectedFirmwareEl.textContent = product.name;
+      if (window.productOptions) {
+        const chipFamily = detectedChipName?.includes('ESP32-S3') ? 'ESP32-S3' : 
+                          detectedChipName?.includes('ESP32-P4') ? 'ESP32-P4' : null;
+        if (chipFamily && window.productOptions[chipFamily]) {
+          const product = window.productOptions[chipFamily].find(p => p.id === productDropdown.value);
+          if (product) {
+            selectedProduct = product;
+            selectedFirmwareEl.textContent = `${product.name} (${(product.size / 1024 / 1024).toFixed(1)} MB)`;
+          }
         }
       }
     });
@@ -620,31 +690,40 @@
       const chipFamily = chipName?.includes('ESP32-S3') ? 'ESP32-S3' : 
                         chipName?.includes('ESP32-P4') ? 'ESP32-P4' : null;
       
-      if (chipFamily && PRODUCT_OPTIONS[chipFamily]) {
-        const options = PRODUCT_OPTIONS[chipFamily];
+      if (chipFamily) {
+        // Load firmware options dynamically from GitHub release
+        selectedFirmwareEl.textContent = 'Loading available firmware...';
+        const productOptions = await loadFirmwareOptions();
+        window.productOptions = productOptions;  // Store for dropdown change handler
         
-        // Populate dropdown
-        productDropdown.innerHTML = options.map(opt => 
-          `<option value="${opt.id}">${opt.name}</option>`
-        ).join('');
-        
-        // Auto-select based on detected flash size
-        let defaultProduct = options[0];
-        if (chipFamily === 'ESP32-S3') {
-          // Parse flash size (e.g., "16 MB" -> 16)
-          const flashMB = parseInt(flashSizeMB);
-          if (flashMB >= 16) {
-            // Prefer 16MB variant for 16MB+ chips
-            defaultProduct = options.find(o => o.id === 'ESP32_S3_16MB') || options[0];
+        if (productOptions && productOptions[chipFamily]) {
+          const options = productOptions[chipFamily];
+          
+          // Populate dropdown
+          productDropdown.innerHTML = options.map(opt => 
+            `<option value="${opt.id}">${opt.name} (${(opt.size / 1024 / 1024).toFixed(1)} MB)</option>`
+          ).join('');
+          
+          // Auto-select based on detected flash size
+          let defaultProduct = options[0];
+          if (chipFamily === 'ESP32-S3') {
+            // Parse flash size (e.g., "16 MB" -> 16)
+            const flashMB = parseInt(flashSizeMB);
+            if (flashMB >= 16) {
+              // Prefer 16MB variant for 16MB+ chips
+              defaultProduct = options.find(o => o.id === 'ESP32_S3_16MB') || options[0];
+            }
           }
+          
+          productDropdown.value = defaultProduct.id;
+          selectedProduct = defaultProduct;
+          selectedFirmwareEl.textContent = `${defaultProduct.name} (${(defaultProduct.size / 1024 / 1024).toFixed(1)} MB)`;
+          
+          // Show product selection
+          productSelect.style.display = 'block';
+        } else {
+          selectedFirmwareEl.textContent = `No firmware available for ${chipFamily}`;
         }
-        
-        productDropdown.value = defaultProduct.id;
-        selectedProduct = defaultProduct;
-        selectedFirmwareEl.textContent = defaultProduct.name;
-        
-        // Show product selection
-        productSelect.style.display = 'block';
       }
       
       firmwareInfo.classList.add('visible');
@@ -1148,21 +1227,19 @@ print("SETUP_MODE_SET")
       }
 
       try {
-        flashBtn.textContent = 'Loading firmware...';
+        flashBtn.textContent = 'Downloading firmware...';
         flashBtn.disabled = true;
 
-        // Use the selected product's firmware path
-        const firmwarePath = selectedProduct.firmware;
+        // Use the cached download URL from selectedProduct
         console.log('Selected product:', selectedProduct);
-        console.log('Firmware path:', firmwarePath);
+        console.log('Download URL:', selectedProduct.downloadUrl);
 
-        // Download the merged firmware
-        flashBtn.textContent = 'Downloading firmware...';
-        const resp = await fetch(firmwarePath);
-        if (!resp.ok) {
-          throw new Error(`Failed to download firmware: ${resp.status} ${resp.statusText}`);
+        // Download the firmware
+        const firmwareResp = await fetch(selectedProduct.downloadUrl);
+        if (!firmwareResp.ok) {
+          throw new Error(`Failed to download firmware: ${firmwareResp.status}`);
         }
-        const data = new Uint8Array(await resp.arrayBuffer());
+        const data = new Uint8Array(await firmwareResp.arrayBuffer());
         console.log(`Downloaded ${data.length} bytes`);
         
         // Flash merged firmware at offset 0
