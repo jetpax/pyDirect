@@ -2,10 +2,11 @@
 # Build script for MicroPython with pyDirect modules
 #
 # Usage:
-#   ./build.sh                    # Build with defaults (HTTPSERVER only)
-#   ./build.sh all                # Build with all modules
-#   ./build.sh httpserver twai    # Build with specific modules
-#   ./build.sh clean              # Clean build directory
+#   ./build.sh                              # Build ESP32_S3 with all modules (default)
+#   BOARD=ESP32 ./build.sh                  # Build for vanilla ESP32
+#   BOARD=ESP32_S3 MEMORY_PROFILE=16MB_8MB ./build.sh  # ESP32-S3 N16R8
+#   MANIFEST=retrovms_mini ./build.sh       # Build with specific board manifest
+#   ./build.sh clean                        # Clean build directory
 
 set -e
 
@@ -13,7 +14,19 @@ set -e
 MPY_DIR="${MPY_DIR:-/Users/jep/github/micropython-1.27}"
 PYDIRECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ESP_IDF_PATH="${ESP_IDF_PATH:-/Users/jep/esp/esp-idf-v5.5.1}"
-BOARD="${BOARD:-SCRIPTO_S3}"
+
+# Board selection (chip family)
+BOARD="${BOARD:-ESP32_S3}"
+
+# Memory profile selection (flash/PSRAM variant)
+# ESP32: 4MB (default), 4MB_SPIRAM
+# ESP32_S3: 8MB_2MB (default), 16MB_8MB, 16MB_2MB
+MEMORY_PROFILE="${MEMORY_PROFILE:-}"
+
+# Runtime manifest (pin assignments, capabilities)
+# If not set, uses generic manifest for the chip
+MANIFEST="${MANIFEST:-}"
+
 BOARD_DIR="${PYDIRECT_DIR}/boards/${BOARD}"
 BUILD_DIR="${MPY_DIR}/ports/esp32/build-${BOARD}"
 
@@ -24,15 +37,20 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 print_usage() {
-    echo "Usage: $0 [options] [modules...]"
+    echo "Usage: [ENV_VARS] $0 [options] [modules...]"
+    echo ""
+    echo "Environment Variables:"
+    echo "  BOARD=<chip>          Chip family (default: ESP32_S3)"
+    echo "                        Options: ESP32_S3, ESP32_P4"
+    echo "  MEMORY_PROFILE=<profile>  Flash/PSRAM variant"
+    echo "                        ESP32_S3: 8MB_2MB (default), 16MB_8MB, 16MB_2MB"
+    echo "  MANIFEST=<name>       Runtime board manifest (pin assignments)"
+    echo "                        Examples: generic_esp32s3, retrovms_mini"
     echo ""
     echo "Options:"
     echo "  clean              Clean build directory"
     echo "  flash              Flash firmware to device after build"
     echo "  merge              Create merged firmware with VFS (for web flasher)"
-    echo "  BOARD=<board>      Set board name (default: SCRIPTO_S3)"
-    echo "                     Uses pyDirect/boards/<board> for custom boards"
-    echo "                     Falls back to MicroPython boards if not found"
     echo ""
     echo "Modules (all enabled by default):"
     echo "  httpserver         HTTP Server modules"
@@ -45,11 +63,9 @@ print_usage() {
     echo "  Use -<module> to exclude (e.g., -usbmodem)"
     echo ""
     echo "Examples:"
-    echo "  $0                           # Build with all modules (default)"
-    echo "  $0 flash                     # Build all + flash"
-    echo "  $0 -usbmodem                 # Build all except usbmodem"
-    echo "  $0 httpserver                # Build with httpserver only"
-    echo "  $0 BOARD=SCRIPTO_P4 -usbmodem flash  # P4 without usbmodem + flash"
+    echo "  $0                                      # ESP32-S3 N8R2 with all modules"
+    echo "  BOARD=ESP32_S3 MEMORY_PROFILE=16MB_8MB $0  # ESP32-S3 N16R8"
+    echo "  MANIFEST=retrovms_mini $0 flash         # Build + flash with RetroVMS pins"
 }
 
 # Check prerequisites
@@ -96,6 +112,10 @@ KNOWN_MODULES=("httpserver" "twai" "usbmodem" "gvret" "husarnet" "webrtc" "all")
 for arg in "$@"; do
     if [[ $arg == BOARD=* ]]; then
         BOARD="${arg#BOARD=}"
+    elif [[ $arg == MEMORY_PROFILE=* ]]; then
+        MEMORY_PROFILE="${arg#MEMORY_PROFILE=}"
+    elif [[ $arg == MANIFEST=* ]]; then
+        MANIFEST="${arg#MANIFEST=}"
     elif [ "$arg" == "clean" ]; then
         CLEAN=true
     elif [ "$arg" == "all" ]; then
@@ -120,7 +140,7 @@ for arg in "$@"; do
         else
             echo -e "${RED}❌ Unknown module or board: ${arg}${NC}"
             echo "Available modules: ${KNOWN_MODULES[*]}"
-            echo "Available boards: $(ls -1 ${PYDIRECT_DIR}/boards/ | tr '\n' ' ')"
+            echo "Available boards: $(ls -1 ${PYDIRECT_DIR}/boards/ | grep -v memory_profiles | grep -v manifests | tr '\n' ' ')"
             exit 1
         fi
     fi
@@ -130,17 +150,22 @@ done
 BOARD_DIR="${PYDIRECT_DIR}/boards/${BOARD}"
 BUILD_DIR="${MPY_DIR}/ports/esp32/build-${BOARD}"
 
+# Add MEMORY_PROFILE suffix to build dir if specified
+if [ -n "$MEMORY_PROFILE" ]; then
+    BUILD_DIR="${BUILD_DIR}-${MEMORY_PROFILE}"
+fi
+
 # Determine if using external board or MicroPython built-in board
 USE_EXTERNAL_BOARD=false
 if [ -d "$BOARD_DIR" ]; then
     USE_EXTERNAL_BOARD=true
-    echo -e "${GREEN}📋 Using external board definition: ${BOARD_DIR}${NC}"
+    echo -e "${GREEN}📋 Using pyDirect board definition: ${BOARD}${NC}"
 else
     echo -e "${YELLOW}📋 Using MicroPython built-in board: ${BOARD}${NC}"
     BOARD_DIR=""
 fi
 
-# Default to all modules if none specified
+# Default modules - all enabled for ESP32-S3 and ESP32-P4
 if [ ${#MODULES[@]} -eq 0 ]; then
     MODULES=("httpserver" "twai" "usbmodem" "gvret" "husarnet" "webrtc")
 fi
@@ -167,16 +192,78 @@ fi
 # For external boards, copy partition table to MicroPython tree if it exists
 # This enables portable paths (relative to ports/esp32) for GHA builds
 if [ "$USE_EXTERNAL_BOARD" = true ]; then
-    PARTITION_FILES=$(find "${BOARD_DIR}" -name "partitions*.csv" 2>/dev/null)
-    if [ -n "$PARTITION_FILES" ]; then
-        # Create the boards subdirectory in MicroPython if needed
-        mkdir -p "${MPY_DIR}/ports/esp32/boards/${BOARD}"
-        for pfile in $PARTITION_FILES; do
-            cp "$pfile" "${MPY_DIR}/ports/esp32/boards/${BOARD}/"
-            echo -e "${GREEN}📦 Copied $(basename $pfile) to ports/esp32/boards/${BOARD}/${NC}"
+    # Create the boards subdirectory in MicroPython if needed
+    mkdir -p "${MPY_DIR}/ports/esp32/boards/${BOARD}"
+    
+    # Copy partition tables from partitions/ subdirectory (new structure)
+    if [ -d "${BOARD_DIR}/partitions" ]; then
+        for pfile in "${BOARD_DIR}/partitions/"*.csv; do
+            if [ -f "$pfile" ]; then
+                cp "$pfile" "${MPY_DIR}/ports/esp32/boards/${BOARD}/"
+                echo -e "${GREEN}📦 Copied $(basename $pfile) to ports/esp32/boards/${BOARD}/${NC}"
+            fi
         done
     fi
+    
+    # Legacy: copy partition tables from board root directory
+    for pfile in "${BOARD_DIR}/"partitions*.csv; do
+        if [ -f "$pfile" ]; then
+            cp "$pfile" "${MPY_DIR}/ports/esp32/boards/${BOARD}/"
+            echo -e "${GREEN}📦 Copied $(basename $pfile) to ports/esp32/boards/${BOARD}/${NC}"
+        fi
+    done
+    
+    # Copy sdkconfig overlay files (16mb, oct, etc.)
+    for sfile in "${BOARD_DIR}/"sdkconfig.*; do
+        if [ -f "$sfile" ]; then
+            cp "$sfile" "${MPY_DIR}/ports/esp32/boards/${BOARD}/"
+        fi
+    done
 fi
+
+# Copy runtime manifest to device-scripts for board detection
+copy_manifest() {
+    local MANIFEST_FILE=""
+    local DEST_DIR="${PYDIRECT_DIR}/device-scripts/lib"
+    
+    if [ -n "$MANIFEST" ]; then
+        # Use explicitly specified manifest
+        MANIFEST_FILE="${PYDIRECT_DIR}/boards/manifests/${MANIFEST}.json"
+        if [ ! -f "$MANIFEST_FILE" ]; then
+            echo -e "${RED}❌ Manifest not found: ${MANIFEST_FILE}${NC}"
+            echo "Available manifests: $(ls -1 ${PYDIRECT_DIR}/boards/manifests/*.json | xargs -n1 basename | sed 's/.json//' | tr '\n' ' ')"
+            exit 1
+        fi
+    else
+        # Use generic manifest based on chip family
+        case "$BOARD" in
+            ESP32)
+                MANIFEST_FILE="${PYDIRECT_DIR}/boards/manifests/generic_esp32.json"
+                ;;
+            ESP32_S3)
+                MANIFEST_FILE="${PYDIRECT_DIR}/boards/manifests/generic_esp32s3.json"
+                ;;
+            ESP32_P4)
+                MANIFEST_FILE="${PYDIRECT_DIR}/boards/manifests/scripto_p4_c6.json"
+                ;;
+            *)
+                # Check for chip-specific generic manifest
+                local GENERIC="${PYDIRECT_DIR}/boards/manifests/generic_$(echo $BOARD | tr '[:upper:]' '[:lower:]').json"
+                if [ -f "$GENERIC" ]; then
+                    MANIFEST_FILE="$GENERIC"
+                fi
+                ;;
+        esac
+    fi
+    
+    if [ -n "$MANIFEST_FILE" ] && [ -f "$MANIFEST_FILE" ]; then
+        mkdir -p "$DEST_DIR"
+        cp "$MANIFEST_FILE" "$DEST_DIR/board.json"
+        echo -e "${GREEN}📋 Copied $(basename $MANIFEST_FILE) → device-scripts/lib/board.json${NC}"
+    fi
+}
+
+copy_manifest
 
 # Build CMake options
 CMAKE_OPTS=(
@@ -194,6 +281,12 @@ if [ "$USE_EXTERNAL_BOARD" = true ]; then
     CMAKE_OPTS+=("-DMICROPY_BOARD_DIR=${BOARD_DIR}")
 else
     CMAKE_OPTS+=("-DMICROPY_BOARD=${BOARD}")
+fi
+
+# Export MEMORY_PROFILE for mpconfigboard.cmake to pick up
+if [ -n "$MEMORY_PROFILE" ]; then
+    export MEMORY_PROFILE
+    echo -e "${GREEN}📊 Memory profile: ${MEMORY_PROFILE}${NC}"
 fi
 
 # Enable requested modules

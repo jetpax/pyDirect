@@ -1,214 +1,78 @@
-# Custom Board Definitions
+# pyDirect Board Definitions
 
-This directory contains custom MicroPython board definitions for pyDirect with integrated WiFi onboarding.
+This directory contains board definitions for building pyDirect firmware across different ESP32 chip families and memory configurations.
 
-## Board Structure
+## Supported Chips
 
-Each board directory contains both **build configuration** and **runtime device scripts**:
+- **ESP32-S3** - Primary target (Xtensa LX7, USB-OTG, WiFi, BLE)
+- **ESP32-P4** - High-performance target (Ethernet, no WiFi)
+
+> Note: Vanilla ESP32 (Xtensa LX6) is not supported due to atomic operation compatibility issues with WebRTC libraries.
+
+## Architecture
+
+### Directory Structure
 
 ```
-boards/BOARD_NAME/
-├── manifest.json              # Board metadata (hardware, network config)
-├── mpconfigboard.cmake        # CMake configuration
-├── mpconfigboard.h            # C preprocessor definitions
-├── sdkconfig.board            # ESP-IDF Kconfig options
-├── partitions-*.csv           # Flash partition table
-├── manifest.py                # Frozen modules (optional)
-├── device-scripts/            # Runtime Python scripts
-│   ├── boot.py                # Boot configuration
-│   ├── main.py                # Main orchestrator with WiFi onboarding
-│   └── lib/
-│       ├── board_config.py    # Hardware definitions (auto-generated)
-│       ├── wifi_manager.py    # WiFi credential storage (NVS)
-│       └── wifi_onboarding.py # Captive portal implementation
-└── README.md                  # Board documentation
+boards/
+├── ESP32_S3/           # ESP32-S3 (Xtensa LX7, USB-OTG)
+├── ESP32_P4/           # ESP32-P4 (high-perf, Ethernet)
+├── memory_profiles/    # Shared flash/PSRAM configurations
+│   ├── esp32s3_8mb_2mb_quad.kconfig
+│   ├── esp32s3_16mb_8mb_oct.kconfig
+│   └── esp32s3_16mb_2mb_quad.kconfig
+└── manifests/          # Runtime board manifests (synced from registry)
+    ├── generic_esp32s3.json
+    ├── retrovms_mini.json
+    └── scripto_p4_c6.json
 ```
 
-## Available Boards
+### Build-time vs Runtime Configuration
 
-### SCRIPTO_P4
-ESP32-P4 development board with Ethernet, CAN, and advanced features.
-- 16MB Flash, Ethernet (IP101), CAN, SD card, Audio
-- See [SCRIPTO_P4/README.md](SCRIPTO_P4/README.md)
+| Concern | What varies | Source |
+|---------|-------------|--------|
+| **Build-time** | Flash size, PSRAM, chip-specific SDK config | `boards/<CHIP>/sdkconfig.board` + memory profiles |
+| **Runtime** | Pin assignments, capabilities, devices | `manifests/*.json` → copied to device `/lib/board.json` |
 
-### ESP32_S3_N8R2
-Generic ESP32-S3 with 8MB flash, 2MB PSRAM, and RGB LED.
-- 8MB Flash, 2MB PSRAM (octal), RGB LED on GPIO48
-- See [ESP32_S3_N8R2/README.md](ESP32_S3_N8R2/README.md)
+### Memory Profiles
 
-## Quick Start
+Instead of creating separate board directories for each flash/PSRAM variant (N8R2, N16R8, N16R2, etc.), we use **memory profiles** that can be combined with a base chip configuration:
 
-### 1. Build Firmware
+| Profile | Flash | PSRAM | Chips |
+|---------|-------|-------|-------|
+| `8mb_2mb_quad` | 8MB | 2MB Quad | ESP32-S3 (default) |
+| `16mb_8mb_oct` | 16MB | 8MB Octal | ESP32-S3 |
+| `16mb_2mb_quad` | 16MB | 2MB Quad | ESP32-S3 (RetroVMS) |
+
+### Building
 
 ```bash
-./build.sh BOARD_NAME all --flash
+# Build for ESP32-S3 with 8MB flash (default profile)
+BOARD=ESP32_S3 ./build.sh
+
+# Build for ESP32-S3 with 16MB flash/8MB PSRAM
+BOARD=ESP32_S3 MEMORY_PROFILE=16MB_8MB ./build.sh
+
+# Build for specific product with manifest
+BOARD=ESP32_S3 MANIFEST=retrovms_mini ./build.sh
 ```
 
-### 2. Upload Device Scripts with WiFi Configuration
+### Adding a New Chip Family
 
-```bash
-./upload-device-scripts.sh /dev/ttyUSB0 BOARD_NAME
+1. Create `boards/<CHIP>/` with:
+   - `mpconfigboard.h` - MicroPython board config
+   - `mpconfigboard.cmake` - CMake includes
+   - `sdkconfig.board` - Chip-specific Kconfig
+   - `partitions/` - Partition tables for different flash sizes
 
-# Interactive WiFi configuration:
-Configure WiFi now? (y/n): y
-# Select network and enter password
-```
+2. Add memory profile(s) if new configurations needed
 
-### 3. Access Device
+3. Add manifest(s) to `scripto-studio-registry/Boards/`
 
-Device is available at: **`http://pyDirect-XXXX.local`** (where XXXX = last 4 chars of MAC)
+### Legacy Board Directories
 
-## WiFi Onboarding
-
-All boards include captive portal WiFi onboarding:
-
-**Option 1: Pre-configure during upload** (recommended)
-- Upload script scans networks and prompts for credentials
-- Saves to NVS, device connects automatically on boot
-
-**Option 2: Captive portal** (fallback)
-- Device starts AP: `pyDirect-XXXX`
-- Connect to AP, visit `http://192.168.4.1/setup`
-- Configure WiFi via web interface
-
-## Creating a New Board
-
-### 1. Copy Existing Board
-
-```bash
-cp -r boards/ESP32_S3_N8R2 boards/MY_BOARD
-```
-
-### 2. Update Configuration
-
-**manifest.json:**
-- Update identity (id, name, chip)
-- Configure network settings (hostname pattern, mDNS)
-- Define hardware resources (pins, devices)
-
-**mpconfigboard.cmake:**
-- Set `IDF_TARGET` (esp32, esp32s3, esp32c3, etc.)
-- Configure sdkconfig defaults
-
-**mpconfigboard.h:**
-- Set board name and MCU name
-- Define hardware pins (I2C, SPI, etc.)
-
-**sdkconfig.board:**
-- Flash and PSRAM configuration
-- Partition table path
-- Logging levels
-
-**device-scripts/lib/board_config.py:**
-- Update from manifest.json (or regenerate)
-- Verify pin definitions match hardware
-
-### 3. Build and Test
-
-```bash
-./build.sh MY_BOARD all --flash
-./upload-device-scripts.sh /dev/ttyUSB0 MY_BOARD
-```
-
-## Key Configuration Files
-
-### manifest.json (NEW)
-
-Board metadata with hardware definitions:
-- **identity**: Board ID, name, vendor, chip
-- **network**: Hostname pattern, mDNS, AP settings
-- **capabilities**: WiFi, Ethernet, CAN, etc.
-- **resources**: Pin assignments, I2C, SPI, UART
-- **devices**: Ethernet PHY, status LED, peripherals
-- **memory**: Flash and PSRAM configuration
-
-### mpconfigboard.cmake
-
-CMake configuration:
-- `IDF_TARGET` - ESP32 variant
-- `SDKCONFIG_DEFAULTS` - List of sdkconfig files
-- `MICROPY_FROZEN_MANIFEST` - Frozen modules
-
-### mpconfigboard.h
-
-C preprocessor definitions:
-- `MICROPY_HW_BOARD_NAME` - Board name
-- `MICROPY_HW_MCU_NAME` - MCU name
-- Hardware pin definitions
-
-### sdkconfig.board
-
-ESP-IDF Kconfig options:
-- Flash configuration (size, mode, frequency)
-- PSRAM configuration
-- Partition table path
-- Logging levels
-- USB configuration
-
-### partitions-*.csv
-
-Flash partition table:
-- NVS storage (WiFi credentials)
-- PHY init data
-- Application partition
-- Filesystem (VFS) partition
-
-## Device Scripts
-
-### boot.py
-
-Minimal boot configuration:
-- Disable debug output
-- Disable WiFi (main.py handles it)
-- Optional CPU frequency setting
-
-### main.py
-
-Main orchestrator with WiFi onboarding:
-- Check for WiFi credentials in NVS
-- Start captive portal if no credentials
-- Connect to WiFi if credentials exist
-- Start HTTP server + WebREPL
-- Start mDNS responder
-
-### lib/board_config.py
-
-Board-specific configuration:
-- Hardware pin definitions
-- Hostname/SSID generation
-- mDNS service definitions
-- Board capabilities
-
-### lib/wifi_manager.py
-
-WiFi credential management:
-- Save/load credentials from NVS
-- WiFi network scanning
-- Connection management
-- Credential reset
-
-### lib/wifi_onboarding.py
-
-Captive portal implementation:
-- AP mode with DNS server
-- WiFi network scanner
-- Setup web interface
-- Success page with mDNS URL
-
-## Using MicroPython Built-in Boards
-
-To use a board from MicroPython's built-in collection:
-
-```bash
-./build.sh ESP32_GENERIC_S3 all
-```
-
-The build script falls back to MicroPython's boards if no matching directory exists in `pyDirect/boards/`.
-
-**Note:** Built-in boards won't have WiFi onboarding device scripts. Use `device-scripts/` (minimal) instead.
-
-## See Also
-
-- [Build Guide](../docs/BUILD_GUIDE.md)
-- [Board-specific READMEs](.)
-- [WiFi Onboarding Walkthrough](../.gemini/antigravity/brain/55c489aa-aeaa-4ff3-87dc-bbde5c5d0c2d/walkthrough.md)
+The following directories are maintained for backward compatibility but are deprecated:
+- `ESP32_S3_N8R2/` → Use `ESP32_S3` with default profile
+- `SCRIPTO_S3/` → Use `ESP32_S3` with 16MB profile
+- `RETROVMS_MINI/` → Use `ESP32_S3` with 16MB profile + manifest
+- `SCRIPTO_P4/` → Use `ESP32_P4`

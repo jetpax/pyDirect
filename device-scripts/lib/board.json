@@ -1,0 +1,68 @@
+{
+  "identity": {
+    "id": "generic_esp32",
+    "name": "Generic ESP32",
+    "vendor": "generic",
+    "chip": "ESP32",
+    "revision": "1.0.0",
+    "description": "Generic ESP32 board with no fixed hardware"
+  },
+
+  "capabilities": {
+    "wifi": true,
+    "bluetooth": false,
+    "neopixel": false,
+    "status_led": true,
+    "ethernet_mac": true
+  },
+
+  "resources": {
+    "pins": {
+      "status_led": 2,
+      "boot": 0
+    },
+
+    "uart": {
+      "primary": {
+        "tx": 1,
+        "rx": 3
+      }
+    },
+
+    "i2c": {
+      "i2c0": {
+        "sda": 21,
+        "scl": 22
+      }
+    },
+
+    "spi": {
+      "vspi": {
+        "mosi": 23,
+        "miso": 19,
+        "sclk": 18,
+        "cs": 5
+      },
+      "hspi": {
+        "mosi": 13,
+        "miso": 12,
+        "sclk": 14,
+        "cs": 15
+      }
+    }
+  },
+
+  "devices": {
+    "status_led": {
+      "type": "gpio",
+      "active_low": false,
+      "description": "Onboard blue LED on GPIO2 (common on ESP32 dev boards)"
+    }
+  },
+
+  "memory": {
+    "flash_size": "4MB",
+    "psram_size": "0",
+    "psram_mode": "none"
+  }
+}

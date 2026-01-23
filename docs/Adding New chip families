@@ -1,0 +1,101 @@
+Adding New Chip Families
+The Pattern
+Each chip family has fundamentally different:
+
+CPU architecture (Xtensa LX6/LX7 vs RISC-V)
+Peripheral set (USB-OTG, Ethernet MAC, etc.)
+Memory constraints
+SDK config options
+So we'd have one board directory per chip family, with flash/PSRAM as build-time parameters:
+
+pyDirect/boards/
+├── ESP32/           # Vanilla ESP32 (Xtensa LX6, no USB-OTG)
+├── ESP32_S3/        # ESP32-S3 (Xtensa LX7, USB-OTG, 8/16MB flash)
+├── ESP32_C6/        # ESP32-C6 (RISC-V, WiFi 6, BLE 5, Thread/Zigbee)
+├── ESP32_P4/        # ESP32-P4 (Xtensa, high-perf, no WiFi)
+└── ESP32_C3/        # ESP32-C3 (RISC-V, low-cost, WiFi/BLE)
+Example: Adding ESP32-C6
+1. Create board definition:
+
+pyDirect/boards/ESP32_C6/
+├── mpconfigboard.h           # C6-specific MicroPython config
+├── mpconfigboard.cmake       # CMake includes
+├── sdkconfig.board           # C6-specific Kconfig
+└── partitions/
+    ├── partitions-4mb.csv    # Many C6 modules are 4MB
+    └── partitions-8mb.csv
+2. Key sdkconfig differences:
+
+kconfig
+# ESP32-C6 specific
+CONFIG_IDF_TARGET="esp32c6"
+# C6 has different flash/PSRAM options
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y   # or 8MB
+# C6-specific features
+CONFIG_ESP_WIFI_6=y                # WiFi 6 support
+CONFIG_BT_NIMBLE_ENABLED=y         # BLE 5.0
+CONFIG_OPENTHREAD_ENABLED=y        # Thread/Zigbee (optional)
+# C6 uses USB-Serial-JTAG for console (no USB-OTG)
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+3. Registry manifest:
+
+json
+// scripto-studio-registry/Boards/generic_esp32c6.json
+{
+  "identity": {
+    "id": "generic_esp32c6",
+    "name": "Generic ESP32-C6",
+    "vendor": "generic",
+    "chip": "ESP32-C6"
+  },
+  "capabilities": {
+    "wifi": true,
+    "wifi6": true,
+    "bluetooth": true,
+    "ble5": true,
+    "thread": true,
+    "zigbee": true,
+    "neopixel": true,
+    "status_led": true
+    // NO usb_otg - C6 doesn't have it
+  },
+  "resources": {
+    "pins": {
+      "status_led": 8,  // Common C6 dev board LED
+      "boot": 9
+    },
+    "uart": {
+      "primary": { "tx": 16, "rx": 17 }
+    },
+    "i2c": {
+      "i2c0": { "sda": 6, "scl": 7 }
+    }
+  }
+}
+4. CI matrix entry:
+
+yaml
+- board: ESP32_C6
+  target: esp32c6
+  flash: 4MB
+  partitions: partitions-4mb.csv
+Example: Adding Vanilla ESP32
+pyDirect/boards/ESP32/
+├── mpconfigboard.h
+├── mpconfigboard.cmake
+├── sdkconfig.board
+└── partitions/
+    ├── partitions-4mb.csv
+    └── partitions-8mb.csv    # ESP32-WROVER with PSRAM
+Key differences from S3:
+
+kconfig
+# Vanilla ESP32
+CONFIG_IDF_TARGET="esp32"
+# No USB-OTG, uses UART for console
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+# Some have PSRAM, some don't
+# CONFIG_SPIRAM=y  # Only for WROVER modules
+# Older Bluetooth classic + BLE 4.2
+CONFIG_BT_ENABLED=y
+CONFIG_BT_CLASSIC_ENABLED=y
