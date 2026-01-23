@@ -3,3 +3,4 @@
 **/certs/
 *.pem
 *.key
+AGENTS.md

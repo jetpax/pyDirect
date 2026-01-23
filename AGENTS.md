@@ -1,199 +1,129 @@
 # pyDirect Agent Instructions
 
-**pyDirect** is a suite of C-based accelerator modules that provide high-performance functionality for MicroPython applications. These modules implement critical functionality directly in C with minimal Python overhead, achieving near-native performance.
+**pyDirect** is a suite of C-based accelerator modules for MicroPython on ESP32. These modules implement high-performance functionality directly in C, achieving near-native performance for networking, communication, and I/O operations.
 
-Always reference these instructions first and fallback to search or bash commands only when you encounter unexpected
-information that does not match the info here.
+## Project Overview
 
-## Shared Ground Rules
-- defer ISR work to task context, and follow C99 with two-space indentation/no tabs.
-- Match file organization: core stack under `src`, MCU/BSP support in `hw/{mcu,bsp}`, examples under `examples/{device,host,dual}`, docs in `docs`, tests under `test/{unit-test,fuzz,hil}`.
-- Prefer `.clang-format` for C/C++ formatting, run `pre-commit run --all-files` before submitting, and document board/HIL coverage when applicable.
-- Commit in imperative mood, keep changes scoped, and supply PRs with linked issues plus test/build evidence.
+pyDirect provides custom MicroPython modules for:
+- **httpserver** - HTTP/HTTPS server with WebSocket support
+- **webrepl** - WebREPL over WebSocket and WebRTC
+- **webrtc** - WebRTC DataChannel for browser P2P
+- **twai** - CAN/TWAI bus support
+- **gvret** - GVRET protocol for SavvyCAN
+- **husarnet** - P2P VPN networking
+- **usbmodem** - USB modem (SIM7600) support
+- **plc** - PLC/V2G protocol (experimental)
 
+## Repository Structure
 
+```
+pyDirect/
+├── httpserver/       # HTTP/HTTPS/WebSocket server
+├── webrepl/          # WebREPL implementation
+├── webrtc/           # WebRTC DataChannel
+├── twai/             # CAN bus support
+├── gvret/            # GVRET protocol
+├── husarnet/         # P2P VPN
+├── usbmodem/         # USB modem
+├── plc/              # PLC/V2G
+├── boards/           # Board definitions
+│   ├── ESP32_S3/     # ESP32-S3 8MB
+│   ├── ESP32_S3_16MB/# ESP32-S3 16MB
+│   ├── ESP32_P4/     # ESP32-P4
+│   └── manifests/    # Runtime board configs
+├── device-scripts/   # Python scripts baked into VFS
+├── docs/             # Documentation and web flasher
+├── tools/            # Build and CI tools
+└── .github/          # Workflows and build matrix
+```
 
-## Build Options
+## Build System
 
+### Build Matrix
 
+All builds are defined in **`.github/build-matrix.json`**:
 
-## Flashing and Deployment
+```json
+{
+  "builds": [
+    {
+      "board": "ESP32_S3",
+      "target": "esp32s3",
+      "manifest": "generic_esp32s3",
+      "artifact_name": "ESP32_S3",
+      "description": "Generic ESP32-S3 (8MB Flash)"
+    }
+  ]
+}
+```
 
-- **Flash with serial**:
+### Building Locally
 
-- **Flash with JTAG**:
-
-
-
-## Hardware-in-the-Loop (HIL) Testing
-
-pyDirect modules support HIL testing via WebREPL Binary Protocol, allowing remote test execution on ESP32 devices without disrupting the connection.
-
-### WebREPL HIL Test Infrastructure
-
-**Location**: `<module>/tests/` (e.g., `httpserver/tests/`, `twai/tests/`)
-
-**Core Components**:
-- `webrepl_client.py` - WebREPL Binary Protocol client library
-- `test_helpers.py` - Reusable assertion functions and context managers
-- `test_*.py` - Individual test suites
-
-**Requirements**:
 ```bash
-# One-time setup
-cd <module>/tests
-python3 -m venv venv
-source venv/bin/activate
-pip install websockets cbor2
+# Clone dependencies
+git clone https://github.com/micropython/micropython.git
+cd micropython && git checkout v1.27.0
+
+# Build firmware
+BOARD=ESP32_S3 MANIFEST=generic_esp32s3 ./build.sh
 ```
 
-### Writing HIL Tests
+### Adding a New Product
 
-**Key Principles**:
-1. **JSON-only output**: Test code must NOT print - only the final JSON result is output
-2. **Production code stays clean**: Tests bear the burden, not the protocol implementation
-3. **No server lifecycle tests**: Tests that start/stop httpserver/wsserver conflict with WebREPL
+1. Create manifest: `boards/manifests/{product}.json`
+2. Add to build matrix: `.github/build-matrix.json`
+3. Push to master - GHA builds automatically
 
-**Test Code Pattern**:
-```python
-async def test_feature(client: WebREPLTestClient) -> bool:
-    """Test description"""
-    async with TestAssertion(client, "Test name"):
-        code = """
-import module_to_test
+## Coding Standards
 
-# Test logic (NO print statements)
-result = module_to_test.do_something()
-assert result == expected, "Error message"
+- **C99** with two-space indentation, no tabs
+- **snake_case** for variables/functions
+- **UPPER_CASE** for macros and constants
+- Defer ISR work to task context
+- No dynamic allocation where possible
+- Match existing patterns in files you modify
 
-# Assertions only - JSON added by wrapper automatically
-"""
-        result = await client.run_test(code, timeout=15.0)
-        
-        if result.status != 'pass':
-            raise AssertionError(f"{result.error_type}: {result.error}")
-        
-        return True
+## Board Manifests
+
+Runtime configuration is defined in JSON manifests:
+
+```json
+{
+  "identity": {
+    "id": "my_product",
+    "name": "My Product",
+    "chip": "ESP32-S3"
+  },
+  "capabilities": { "can": true, "wifi": true },
+  "resources": {
+    "pins": { "status_led": 48 },
+    "can": { "can0": { "tx": 4, "rx": 5 } }
+  }
+}
 ```
 
-**Protocol Details**:
-- Test code is wrapped with try/except and returns JSON: `{"status": "pass|fail|error", "message": "...", "error": "...", "error_type": "..."}`
-- ESP-IDF logging (e.g., `I (timestamp) TAG: message`) appears alongside JSON but doesn't interfere
-- Only the JSON line is parsed for test results
+Available at runtime: `/lib/board.json`
 
-**Running Tests**:
-```bash
-cd <module>/tests
-source venv/bin/activate
-python test_<name>.py --url ws://192.168.1.154/webrepl --password <password>
+## Web Flasher
 
-# For HTTPS with self-signed cert:
-python test_<name>.py --url wss://192.168.1.154/webrepl --password <password> --no-ssl-verify
+The web flasher at `https://jetpax.github.io/pyDirect/`:
+- Detects chip family via Web Serial
+- Dynamically discovers firmware from GitHub Releases
+- Downloads from `docs/firmware/` (same origin)
 
-# Debug mode (show all protocol messages):
-python test_<name>.py --url <url> --password <password> --debug
-```
+## Key Files
 
-**Examples**:
-- `httpserver/tests/test_http_functional.py` - HTTP URI handlers (doesn't start/stop server)
-- `httpserver/tests/test_connection_recovery.py` - WebSocket connection cleanup
-- `twai/tests/test_twai_loopback.py` - CAN/TWAI loopback mode (no external hardware)
+| File | Purpose |
+|------|---------|
+| `build.sh` | Main build script |
+| `.github/build-matrix.json` | Build configurations |
+| `tools/ci_update_dependencies.py` | Patches MicroPython for GHA |
+| `docs/index.html` | Web flasher |
+| `boards/manifests/*.json` | Runtime board configs |
 
+## Supported Chips
 
+- **ESP32-S3** - Primary target (Xtensa LX7, USB-OTG, WiFi, BLE)
+- **ESP32-P4** - High-performance (via C6 WiFi coprocessor)
 
-## Documentation
-
-
-## Code Quality and Validation
-
-
-
-## Static Analysis with PVS-Studio
-
-
-## Validation Checklist
-
-### ALWAYS Run These After Making Changes
-
-
-### Manual Testing Scenarios
-
-### Board Selection for Testing
-
-## Release Instructions
-
-**DO NOT commit files automatically - only modify files and let the maintainer review before committing.**
-
-1. Bump the release version variable at the top of `tools/make_release.py`.
-2. Execute `python3 tools/make_release.py` to refresh:
-   - `src/tusb_option.h` (version defines)
-   - `repository.yml` (version mapping)
-   - `library.json` (PlatformIO version)
-   - `sonar-project.properties` (SonarQube version)
-   - `docs/reference/boards.rst` (generated board documentation)
-   - `hw/bsp/BoardPresets.json` (CMake presets)
-3. Generate release notes for `docs/info/changelog.rst`:
-   - Get commit list: `git log <last-release-tag>..HEAD --oneline`
-   - **Visit GitHub PRs** for merged pull requests to understand context and gather details
-   - Use GitHub tools to search/read PRs: `github-mcp-server-list_pull_requests`, `github-mcp-server-pull_request_read`
-   - Extract key changes, API modifications, bug fixes, and new features from PR descriptions
-   - Add new changelog entry following the existing format:
-     - Version heading with equals underline (e.g., `0.20.0` followed by `======`)
-     - Release date in italics (e.g., `*November 19, 2024*`)
-     - Major sections: General, API Changes, Controller Driver (DCD & HCD), Device Stack, Host Stack, Testing
-     - Use bullet lists with descriptive categorization
-     - Reference function names, config macros, and file paths using RST inline code (double backticks)
-     - Include meaningful descriptions, not just commit messages
-4. **Validation before commit**:
-   - Run unit tests: `cd test/unit-test && ceedling test:all`
-   - Build at least one example: `cd examples/device/cdc_msc && make BOARD=stm32f407disco all`
-   - Verify changed files look correct: `git diff --stat`
-5. **Leave files unstaged** for maintainer to review, modify if needed, and commit with message: `Bump version to X.Y.Z`
-6. **After maintainer commits**: Create annotated tag with `git tag -a vX.Y.Z -m "Release X.Y.Z"`
-7. Push commit and tag: `git push origin <branch> && git push origin vX.Y.Z`
-8. Create GitHub release from the tag with changelog content
-
-## Repository Structure Quick Reference
-
-
-#### Build Time Reference
-- **Dependency fetch**: <1 second
-- **Single example build**: 1-3 seconds
-- **Unit tests**: ~4 seconds
-- **Documentation build**: ~2.5 seconds
-- **Full board examples**: 15-20 seconds
-- **Toolchain installation**: 2-5 minutes (one-time)
-
-#### Key Files to Know
-
-
-#### Debugging Build Issues
-
-
-#### Working with USB Device Classes
-
-
-
-#### MCU Family Support
-
-
-### Code Style Guidelines
-
-#### General Coding Standards
-- Use C99 standard
-- Memory-safe: no dynamic allocation
-- Thread-safe: defer all interrupt events to non-ISR task functions
-- 2-space indentation, no tabs
-- Use snake_case for variables/functions
-- Use UPPER_CASE for macros and constants
-- Follow existing variable naming patterns in files you're modifying
-- Include proper header comments with MIT license
-- Add descriptive comments for non-obvious functions
-
-#### Best Practices
-- When including headers, group in order: C stdlib, tusb common, drivers, classes
-- Always check return values from functions that can fail
-- Use TU_ASSERT() for error checking with return statements
-- Follow the existing code patterns in the files you're modifying
-
-Remember: pyDirect is designed for embedded systems - builds are fast, tests are focused, and the codebase is optimized for resource-constrained environments.
+> Note: Vanilla ESP32 (Xtensa LX6) is not supported due to atomic operation issues with WebRTC libraries.
