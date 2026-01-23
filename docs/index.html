@@ -446,6 +446,10 @@
     // GitHub repository for firmware releases
     const GITHUB_REPO = 'jetpax/pyDirect';
     const RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+    
+    // CORS proxy for GitHub release downloads (GitHub doesn't allow cross-origin downloads)
+    // When served from GitHub Pages (same origin), we can try direct download first
+    const CORS_PROXY = 'https://corsproxy.io/?';
 
     // Map chip targets to chip families (for matching detected chip to firmware)
     const CHIP_TARGETS = {
@@ -509,6 +513,9 @@
             id: productId,
             name: name,
             asset: asset.name,
+            // Prefer relative path (works on GitHub Pages, same origin)
+            // Fall back to direct GitHub download URL if relative fails
+            relativePath: `./firmware/${asset.name}`,
             downloadUrl: asset.browser_download_url,
             size: asset.size
           });
@@ -1230,12 +1237,24 @@ print("SETUP_MODE_SET")
         flashBtn.textContent = 'Downloading firmware...';
         flashBtn.disabled = true;
 
-        // Use the cached download URL from selectedProduct
+        // Use relative path first (same-origin on GitHub Pages), fallback to CORS proxy
         console.log('Selected product:', selectedProduct);
-        console.log('Download URL:', selectedProduct.downloadUrl);
+        console.log('Relative path:', selectedProduct.relativePath);
+        console.log('GitHub URL:', selectedProduct.downloadUrl);
 
-        // Download the firmware
-        const firmwareResp = await fetch(selectedProduct.downloadUrl);
+        // Download the firmware - try relative path first (same-origin, no CORS needed)
+        let firmwareResp;
+        try {
+          console.log('Trying relative path:', selectedProduct.relativePath);
+          firmwareResp = await fetch(selectedProduct.relativePath);
+          if (!firmwareResp.ok) throw new Error(`Relative path failed: ${firmwareResp.status}`);
+        } catch (relativeError) {
+          // Relative path failed, try CORS proxy with GitHub URL
+          console.log('Relative path failed, trying CORS proxy...', relativeError.message);
+          const proxyUrl = CORS_PROXY + encodeURIComponent(selectedProduct.downloadUrl);
+          firmwareResp = await fetch(proxyUrl);
+        }
+        
         if (!firmwareResp.ok) {
           throw new Error(`Failed to download firmware: ${firmwareResp.status}`);
         }
