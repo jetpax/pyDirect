@@ -65,7 +65,7 @@ jobs:
           fi
 
   build:
-    name: Build ${{ matrix.board }}
+    name: Build ${{ matrix.artifact_name }}
     needs: check-version
     if: needs.check-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
