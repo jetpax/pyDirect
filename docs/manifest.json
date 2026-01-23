@@ -17,5 +17,16 @@
         { "path": "firmware/pyDirect-ESP32_P4-merged.bin", "offset": 0 }
       ]
     }
-  ]
+  ],
+  "product_builds": {
+    "_comment": "Product-specific builds with board manifests baked in. Use these URLs directly for specific products.",
+    "RetroVMS_Mini": {
+      "chipFamily": "ESP32-S3",
+      "firmware": "firmware/pyDirect-RetroVMS_Mini-merged.bin"
+    },
+    "ESP32_S3_16MB": {
+      "chipFamily": "ESP32-S3", 
+      "firmware": "firmware/pyDirect-ESP32_S3_16MB-merged.bin"
+    }
+  }
 }

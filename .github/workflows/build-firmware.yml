@@ -72,12 +72,24 @@ jobs:
     strategy:
       matrix:
         include:
+          # Generic boards (no specific manifest)
           - board: ESP32_S3
             target: esp32s3
+            manifest: ""
+            artifact_name: ESP32_S3
           - board: ESP32_S3_16MB
             target: esp32s3
+            manifest: ""
+            artifact_name: ESP32_S3_16MB
           - board: ESP32_P4
             target: esp32p4
+            manifest: ""
+            artifact_name: ESP32_P4
+          # Product-specific builds (with manifest baked in)
+          - board: ESP32_S3_16MB
+            target: esp32s3
+            manifest: retrovms_mini
+            artifact_name: RetroVMS_Mini
       fail-fast: false
     
     steps:
@@ -125,13 +137,14 @@ jobs:
             
             # Build firmware
             cd ports/esp32
-            echo "🔨 Building ${{ matrix.board }} firmware..."
+            echo "🔨 Building ${{ matrix.artifact_name }} firmware..."
             # Use relative paths - from micropython/ports/esp32, pyDirect is at ../../../pyDirect
             # ESP-IDF is at /opt/esp/idf inside the Docker container
             MPY_DIR=$(pwd)/../.. \
             ESP_IDF_PATH=/opt/esp/idf \
             MICROPY_BOARD_DIR=../../../pyDirect/boards/${{ matrix.board }} \
             BOARD=${{ matrix.board }} \
+            MANIFEST=${{ matrix.manifest }} \
             bash ../../../pyDirect/build.sh
             
             echo "✅ Build complete!"
@@ -141,20 +154,20 @@ jobs:
         run: |
           cd micropython/ports/esp32/build-${{ matrix.board }}
           
-          # Create firmware package
+          # Create firmware package (use artifact_name for product-specific naming)
           mkdir -p $GITHUB_WORKSPACE/artifacts
-          cp micropython.bin $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}.bin
-          cp micropython.elf $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}.elf
-          cp micropython.map $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-${{ needs.check-version.outputs.mpy_version }}.map
+          cp micropython.bin $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.artifact_name }}-${{ needs.check-version.outputs.mpy_version }}.bin
+          cp micropython.elf $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.artifact_name }}-${{ needs.check-version.outputs.mpy_version }}.elf
+          cp micropython.map $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.artifact_name }}-${{ needs.check-version.outputs.mpy_version }}.map
           
-          # Copy merged firmware for web flasher
+          # Copy merged firmware for web flasher (named by artifact_name)
           if [ -f "pyDirect-${{ matrix.board }}-merged.bin" ]; then
-            cp pyDirect-${{ matrix.board }}-merged.bin $GITHUB_WORKSPACE/artifacts/
-            echo "✅ Merged firmware copied to artifacts"
+            cp pyDirect-${{ matrix.board }}-merged.bin $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.artifact_name }}-merged.bin
+            echo "✅ Merged firmware copied to artifacts as pyDirect-${{ matrix.artifact_name }}-merged.bin"
           fi
           
           # Create build info
-          cat > $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.board }}-build-info.txt << EOF
+          cat > $GITHUB_WORKSPACE/artifacts/pyDirect-${{ matrix.artifact_name }}-build-info.txt << EOF
           pyDirect Firmware Build Information
           ====================================
           
