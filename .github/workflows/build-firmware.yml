@@ -122,6 +122,15 @@ jobs:
             mkdir -p /opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s2/include
             echo "✅ Patches and dependencies applied"
             
+            # Install mklittlefs for VFS partition creation
+            echo "📦 Installing mklittlefs..."
+            wget -q https://github.com/earlephilhower/mklittlefs/releases/download/4.1.0/x86_64-linux-gnu-mklittlefs-42acb97.tar.gz
+            tar -xzf x86_64-linux-gnu-mklittlefs-42acb97.tar.gz --strip-components=1
+            mv mklittlefs /usr/local/bin/
+            chmod +x /usr/local/bin/mklittlefs
+            rm x86_64-linux-gnu-mklittlefs-42acb97.tar.gz
+            echo "✅ mklittlefs installed"
+            
             # Initialize submodules (required for berkeley-db, etc.)
             echo "📦 Initializing submodules..."
             git submodule update --init --recursive lib/berkeley-db-1.xx lib/micropython-lib
