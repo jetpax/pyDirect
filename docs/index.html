@@ -230,14 +230,36 @@
       <strong>Selected firmware:</strong> <span id="selectedFirmware">-</span>
     </div>
 
+    <!-- Product Selection (shown after detection) -->
+    <div id="productSelect" style="
+      display: none;
+      background: var(--surface);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    ">
+      <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">
+        Select your board/product:
+      </label>
+      <select id="productDropdown" style="
+        width: 100%;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        background: var(--bg);
+        color: var(--text);
+        font-size: 1rem;
+        cursor: pointer;
+      ">
+        <!-- Options populated dynamically based on detected chip -->
+      </select>
+    </div>
+
     <div class="chip-support">
       <h3>Supported Chips</h3>
       <div class="chips">
         <span class="chip">ESP32-S3</span>
         <span class="chip">ESP32-P4</span>
-        <span class="chip">ESP32</span>
-        <span class="chip">ESP32-C3</span>
-        <span class="chip">ESP32-C6</span>
       </div>
     </div>
     
@@ -410,12 +432,40 @@
     const connectBtn = document.getElementById('connectBtn');
     const flashBtn = document.getElementById('flashBtn');
     const wifiSetupBtn = document.getElementById('wifiSetupBtn');
+    const productSelect = document.getElementById('productSelect');
+    const productDropdown = document.getElementById('productDropdown');
 
     // Global state
     let currentPort = null;
     let currentLoader = null;
     let detectedChipName = null;
     let detectedMacAddress = null;
+    let selectedProduct = null;
+
+    // Product options per chip family
+    const PRODUCT_OPTIONS = {
+      'ESP32-S3': [
+        { id: 'ESP32_S3', name: 'Generic ESP32-S3 (8MB Flash)', firmware: 'firmware/pyDirect-ESP32_S3-merged.bin' },
+        { id: 'ESP32_S3_16MB', name: 'Generic ESP32-S3 (16MB Flash)', firmware: 'firmware/pyDirect-ESP32_S3_16MB-merged.bin' },
+        { id: 'RetroVMS_Mini', name: 'RetroVMS Mini', firmware: 'firmware/pyDirect-RetroVMS_Mini-merged.bin' }
+      ],
+      'ESP32-P4': [
+        { id: 'ESP32_P4', name: 'ESP32-P4 (with C6 WiFi)', firmware: 'firmware/pyDirect-ESP32_P4-merged.bin' }
+      ]
+    };
+
+    // Update firmware display when product selection changes
+    productDropdown.addEventListener('change', () => {
+      const chipFamily = detectedChipName?.includes('ESP32-S3') ? 'ESP32-S3' : 
+                        detectedChipName?.includes('ESP32-P4') ? 'ESP32-P4' : null;
+      if (chipFamily && PRODUCT_OPTIONS[chipFamily]) {
+        const product = PRODUCT_OPTIONS[chipFamily].find(p => p.id === productDropdown.value);
+        if (product) {
+          selectedProduct = product;
+          selectedFirmwareEl.textContent = product.name;
+        }
+      }
+    });
 
     // Chip-specific eFuse base addresses (from tasmota-webserial-esptool v7.3.4)
     const EFUSE_BASES = {
@@ -566,14 +616,37 @@
       // Show device info card
       deviceInfo.classList.add('visible');
 
-      // Determine and show selected firmware
-      let firmware = 'Unknown';
-      if (chipName && chipName.includes('ESP32-S3')) {
-        firmware = 'pyDirect for ESP32-S3 (8MB Flash, 2MB PSRAM)';
-      } else if (chipName && chipName.includes('ESP32-P4')) {
-        firmware = 'pyDirect for ESP32-P4 (16MB Flash)';
+      // Determine chip family and populate product dropdown
+      const chipFamily = chipName?.includes('ESP32-S3') ? 'ESP32-S3' : 
+                        chipName?.includes('ESP32-P4') ? 'ESP32-P4' : null;
+      
+      if (chipFamily && PRODUCT_OPTIONS[chipFamily]) {
+        const options = PRODUCT_OPTIONS[chipFamily];
+        
+        // Populate dropdown
+        productDropdown.innerHTML = options.map(opt => 
+          `<option value="${opt.id}">${opt.name}</option>`
+        ).join('');
+        
+        // Auto-select based on detected flash size
+        let defaultProduct = options[0];
+        if (chipFamily === 'ESP32-S3') {
+          // Parse flash size (e.g., "16 MB" -> 16)
+          const flashMB = parseInt(flashSizeMB);
+          if (flashMB >= 16) {
+            // Prefer 16MB variant for 16MB+ chips
+            defaultProduct = options.find(o => o.id === 'ESP32_S3_16MB') || options[0];
+          }
+        }
+        
+        productDropdown.value = defaultProduct.id;
+        selectedProduct = defaultProduct;
+        selectedFirmwareEl.textContent = defaultProduct.name;
+        
+        // Show product selection
+        productSelect.style.display = 'block';
       }
-      selectedFirmwareEl.textContent = firmware;
+      
       firmwareInfo.classList.add('visible');
 
       return { chipName, flashSizeMB, psramInfo, macAddress };
@@ -1069,67 +1142,54 @@ print("SETUP_MODE_SET")
         return;
       }
 
+      if (!selectedProduct) {
+        alert('No firmware selected. Please select a product from the dropdown.');
+        return;
+      }
+
       try {
         flashBtn.textContent = 'Loading firmware...';
         flashBtn.disabled = true;
 
-        // Load the manifest to get firmware files
-        const manifestResp = await fetch('./manifest.json');
-        const manifest = await manifestResp.json();
+        // Use the selected product's firmware path
+        const firmwarePath = selectedProduct.firmware;
+        console.log('Selected product:', selectedProduct);
+        console.log('Firmware path:', firmwarePath);
+
+        // Download the merged firmware
+        flashBtn.textContent = 'Downloading firmware...';
+        const resp = await fetch(firmwarePath);
+        if (!resp.ok) {
+          throw new Error(`Failed to download firmware: ${resp.status} ${resp.statusText}`);
+        }
+        const data = new Uint8Array(await resp.arrayBuffer());
+        console.log(`Downloaded ${data.length} bytes`);
         
-        // Find the right build for the detected chip
-        let selectedBuild = null;
-        for (const build of manifest.builds) {
-          if (detectedChipName && detectedChipName.includes(build.chipFamily)) {
-            selectedBuild = build;
-            break;
+        // Flash merged firmware at offset 0
+        flashBtn.textContent = 'Flashing...';
+        console.log('About to call flashData...');
+        let progressPercent = 0;
+        try {
+          await currentLoader.flashData(
+            data.buffer,  // Use .buffer property like ESPConnect
+            (bytesWritten, totalBytes) => {
+              progressPercent = Math.floor((bytesWritten / totalBytes) * 100);
+              flashBtn.textContent = `Flashing: ${progressPercent}%`;
+            },
+            0,    // offset = 0 for merged firmware
+            true  // compress = true (ESPConnect uses compression)
+          );
+          console.log(`flashData completed successfully - ${progressPercent}%`);
+        } catch (flashError) {
+          // Check if this is the finalization timeout (device already rebooted)
+          const errorMsg = flashError?.message || String(flashError);
+          if (errorMsg.includes('Timed out waiting for packet header') && progressPercent === 100) {
+            // Flash completed successfully, device rebooted before finalization response
+            console.log('Flash completed successfully (device rebooted)');
+          } else {
+            console.error('flashData threw an error:', flashError);
+            throw flashError;
           }
-        }
-
-        if (!selectedBuild) {
-          throw new Error(`No firmware found for ${detectedChipName}`);
-        }
-
-        console.log('Selected build:', selectedBuild);
-
-        // Download and flash each part
-        for (let i = 0; i < selectedBuild.parts.length; i++) {
-          const part = selectedBuild.parts[i];
-          console.log(`Starting flash of part ${i + 1}/${selectedBuild.parts.length} at offset ${part.offset}`);
-          
-          flashBtn.textContent = `Downloading ${i + 1}/${selectedBuild.parts.length}...`;
-          const resp = await fetch(part.path);
-          const data = new Uint8Array(await resp.arrayBuffer());
-          console.log(`Downloaded ${data.length} bytes`);
-          
-          // Flash with progress callback (matching ESPConnect pattern)
-          console.log('About to call flashData...');
-          let progressPercent = 0;
-          try {
-            await currentLoader.flashData(
-              data.buffer,  // Use .buffer property like ESPConnect
-              (bytesWritten, totalBytes) => {
-                progressPercent = Math.floor((bytesWritten / totalBytes) * 100);
-                flashBtn.textContent = `Flashing ${i + 1}/${selectedBuild.parts.length}: ${progressPercent}%`;
-              },
-              part.offset,
-              true  // compress = true (ESPConnect uses compression)
-            );
-            console.log(`flashData completed successfully - ${progressPercent}%`);
-            flashBtn.textContent = `✓ Flashed ${i + 1}/${selectedBuild.parts.length}`;
-          } catch (flashError) {
-            // Check if this is the finalization timeout (device already rebooted)
-            const errorMsg = flashError?.message || String(flashError);
-            if (errorMsg.includes('Timed out waiting for packet header') && progressPercent === 100) {
-              // Flash completed successfully, device rebooted before finalization response
-              console.log('Flash completed successfully (device rebooted)');
-              flashBtn.textContent = `✓ Flashed ${i + 1}/${selectedBuild.parts.length}`;
-            } else {
-              console.error('flashData threw an error:', flashError);
-              throw flashError;
-            }
-          }
-          console.log(`Completed flashing part ${i + 1}`);
         }
 
         flashBtn.textContent = '✓ Flash Complete!';
