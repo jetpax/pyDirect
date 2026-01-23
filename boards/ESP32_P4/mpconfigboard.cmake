@@ -15,4 +15,5 @@ list(APPEND MICROPY_DEF_BOARD
 )
 
 # Use custom partition table for 16MB flash
-set(MICROPY_PARTITION_TABLE ${MICROPY_BOARD_DIR}/partitions-16mb.csv)
+# Path is relative to ports/esp32 (build.sh copies partition file there)
+set(MICROPY_PARTITION_TABLE boards/ESP32_P4/partitions-16mb.csv)

@@ -1,8 +1,8 @@
-# Scripto ESP32-P4 board-specific configuration
+# ESP32-P4 board-specific configuration
 
-# Use custom partition table
+# Use custom partition table (build.sh copies to ports/esp32/boards/ESP32_P4/)
 CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/SCRIPTO_P4/partitions-16mb.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/ESP32_P4/partitions-16mb.csv"
 
 # Enable WebSocket support in HTTP server (required for wsserver module)
 CONFIG_HTTPD_WS_SUPPORT=y
