@@ -92,6 +92,36 @@ def apply_mspi_workaround():
     except Exception as e:
         print(f"⚠️  Could not apply mspi workaround: {e}")
 
+def fix_mspi_include_dir(cmake_path):
+    """Remove missing mspi include directory from esp32_common.cmake for ESP-IDF v5.5.x"""
+    mspi_include_dir = "/opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include"
+    
+    if os.path.exists(mspi_include_dir):
+        print("ℹ️  mspi include directory exists, no cmake fix needed")
+        return
+    
+    print(f"🔧 Fixing missing mspi include directory in esp32_common.cmake...")
+    try:
+        with open(cmake_path, 'r') as f:
+            content = f.read()
+        
+        # The problematic line adds this include path - we need to remove or guard it
+        old_line = '${IDF_PATH}/components/esp_hw_support/mspi_timing_tuning/port/${IDF_TARGET}/include'
+        
+        if old_line in content:
+            # Comment out the line instead of removing it
+            content = content.replace(
+                old_line,
+                '# ${IDF_PATH}/components/esp_hw_support/mspi_timing_tuning/port/${IDF_TARGET}/include  # Removed for IDF v5.5.x'
+            )
+            with open(cmake_path, 'w') as f:
+                f.write(content)
+            print("✅ Commented out missing mspi include directory")
+        else:
+            print("ℹ️  mspi include path not found in cmake (may already be fixed)")
+    except Exception as e:
+        print(f"⚠️  Could not fix mspi include directory: {e}")
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage: python3 ci_update_dependencies.py <idf_component.yml> <esp32_common.cmake>")
@@ -103,4 +133,6 @@ if __name__ == "__main__":
     update_idf_component_yml(idf_comp_path)
     update_esp32_common_cmake(cmake_path)
     apply_mspi_workaround()
+    fix_mspi_include_dir(cmake_path)
+
 
