@@ -201,63 +201,6 @@ All automated builds are defined in `.github/build-matrix.json`. To add a new pr
 
 See [boards/README.md](boards/README.md) for details.
 
-## 📖 Usage Examples
-
-### HTTP Server with WebSocket
-
-```python
-import httpserver
-import wsserver
-
-# Start HTTP server on port 80
-httpserver.start(80)
-
-# Register WebSocket handler
-def on_message(client_id, message):
-    print(f"Received: {message}")
-    wsserver.send(client_id, f"Echo: {message}")
-
-wsserver.register_handler("/ws", on_message)
-
-# Main loop
-while True:
-    httpserver.process_queue()
-```
-
-### CAN Bus Communication
-
-```python
-import CAN
-
-# Initialize CAN bus
-can = CAN(0, mode=CAN.NORMAL, bitrate=500000, tx=21, rx=22)
-
-# Send frame
-can.send(0x123, b'\x01\x02\x03\x04')
-
-# Receive frame
-msg_id, data = can.recv(timeout=1000)
-print(f"ID: 0x{msg_id:03x}, Data: {data.hex()}")
-```
-
-### WebRTC DataChannel
-
-```python
-import webrtc
-
-# WebRTC server starts automatically with httpserver
-# Connect from browser at: https://device-ip/
-
-# Register data handler
-def on_data(peer_id, data):
-    print(f"Received from {peer_id}: {data}")
-    webrtc.send(peer_id, b"Response")
-
-webrtc.on_data(on_data)
-```
-
-See module-specific READMEs for comprehensive API documentation.
-
 ## 🏗️ Architecture
 
 ### Module Structure
@@ -354,7 +297,6 @@ See individual module READMEs for module-specific contribution guidelines.
 
 - Built on [MicroPython](https://github.com/micropython/micropython)
 - Uses [ESP-IDF](https://github.com/espressif/esp-idf)
-- Inspired by the need for production-ready embedded Python modules
 
 ## 📞 Support
 

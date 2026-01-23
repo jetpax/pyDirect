@@ -1,6 +1,10 @@
-# Production Certificates for ScriptO Studio + ESP32
+# Production Certificates for pyDirect + Scripto Studio
 
 ## Overview
+
+> **Note:** The [web flasher](https://jetpax.github.io/pyDirect/) automatically generates self-signed certificates during device provisioning. This works well for development and testing.
+>
+> This guide is for **production deployments** where you need trusted certificates that won't show browser warnings.
 
 For production use (especially iOS/iPad), self-signed certificates are not viable. This guide covers two approaches:
 1. **Private CA** (recommended for local networks)
