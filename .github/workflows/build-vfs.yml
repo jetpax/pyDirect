@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        board: [ESP32_S3_N8R2, SCRIPTO_P4]
+        board: [ESP32_S3, ESP32_P4]
     
     steps:
       - name: Checkout pyDirect

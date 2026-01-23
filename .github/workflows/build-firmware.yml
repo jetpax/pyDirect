@@ -72,9 +72,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - board: ESP32_S3_N8R2
+          - board: ESP32_S3
             target: esp32s3
-          - board: SCRIPTO_P4
+          - board: ESP32_P4
             target: esp32p4
       fail-fast: false
     
