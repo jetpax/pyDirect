@@ -64,32 +64,29 @@ jobs:
             echo "mpy_version=$CURRENT" >> $GITHUB_OUTPUT
           fi
 
-  build:
-    name: Build ${{ matrix.artifact_name }}
+  load-matrix:
+    name: Load Build Matrix
     needs: check-version
     if: needs.check-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          # Read build matrix from JSON file
+          MATRIX=$(cat .github/build-matrix.json | jq -c '.builds')
+          echo "matrix={\"include\":$MATRIX}" >> $GITHUB_OUTPUT
+          echo "Loaded matrix: $MATRIX"
+
+  build:
+    name: Build ${{ matrix.artifact_name }}
+    needs: [check-version, load-matrix]
+    if: needs.check-version.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
     strategy:
-      matrix:
-        include:
-          # Generic boards (no specific manifest)
-          - board: ESP32_S3
-            target: esp32s3
-            manifest: ""
-            artifact_name: ESP32_S3
-          - board: ESP32_S3_16MB
-            target: esp32s3
-            manifest: ""
-            artifact_name: ESP32_S3_16MB
-          - board: ESP32_P4
-            target: esp32p4
-            manifest: ""
-            artifact_name: ESP32_P4
-          # Product-specific builds (with manifest baked in)
-          - board: ESP32_S3_16MB
-            target: esp32s3
-            manifest: retrovms_mini
-            artifact_name: RetroVMS_Mini
+      matrix: ${{ fromJson(needs.load-matrix.outputs.matrix) }}
       fail-fast: false
     
     steps:
