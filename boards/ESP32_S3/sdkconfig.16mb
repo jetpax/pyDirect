@@ -1,7 +1,0 @@
-# ESP32-S3 16MB Flash Override
-# Included when MEMORY_PROFILE is 16MB_8MB or 16MB_2MB
-
-CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
-
-# Override partition table path
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/ESP32_S3/partitions-16mb.csv"

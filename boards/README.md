@@ -5,7 +5,7 @@ This directory contains board definitions for building pyDirect firmware across 
 ## Supported Chips
 
 - **ESP32-S3** - Primary target (Xtensa LX7, USB-OTG, WiFi, BLE)
-- **ESP32-P4** - High-performance target (Ethernet, no WiFi)
+- **ESP32-P4** - High-performance target (Ethernet via C6 coprocessor)
 
 > Note: Vanilla ESP32 (Xtensa LX6) is not supported due to atomic operation compatibility issues with WebRTC libraries.
 
@@ -15,47 +15,94 @@ This directory contains board definitions for building pyDirect firmware across 
 
 ```
 boards/
-├── ESP32_S3/           # ESP32-S3 (Xtensa LX7, USB-OTG)
-├── ESP32_P4/           # ESP32-P4 (high-perf, Ethernet)
-├── memory_profiles/    # Shared flash/PSRAM configurations
-│   ├── esp32s3_8mb_2mb_quad.kconfig
-│   ├── esp32s3_16mb_8mb_oct.kconfig
-│   └── esp32s3_16mb_2mb_quad.kconfig
-└── manifests/          # Runtime board manifests (synced from registry)
-    ├── generic_esp32s3.json
-    ├── retrovms_mini.json
-    └── scripto_p4_c6.json
+├── ESP32_S3/           # ESP32-S3 8MB flash
+├── ESP32_S3_16MB/      # ESP32-S3 16MB flash
+├── ESP32_P4/           # ESP32-P4 (high-perf, C6 WiFi)
+└── manifests/          # Runtime board manifests
+    ├── generic_esp32s3.json    # Generic S3 dev boards
+    ├── generic_esp32p4.json    # Generic P4 dev boards
+    └── retrovms_mini.json      # RetroVMS Mini product
 ```
+
+### Build Matrix
+
+All builds are defined in **`.github/build-matrix.json`**:
+
+```json
+{
+  "builds": [
+    {
+      "board": "ESP32_S3",
+      "target": "esp32s3",
+      "manifest": "generic_esp32s3",
+      "artifact_name": "ESP32_S3",
+      "description": "Generic ESP32-S3 (8MB Flash)"
+    },
+    ...
+  ]
+}
+```
+
+**To add a new product:**
+1. Create `boards/manifests/{product_name}.json` with pin assignments and capabilities
+2. Add entry to `.github/build-matrix.json`
 
 ### Build-time vs Runtime Configuration
 
 | Concern | What varies | Source |
 |---------|-------------|--------|
-| **Build-time** | Flash size, PSRAM, chip-specific SDK config | `boards/<CHIP>/sdkconfig.board` + memory profiles |
-| **Runtime** | Pin assignments, capabilities, devices | `manifests/*.json` → copied to device `/lib/board.json` |
+| **Build-time** | Flash size, PSRAM, chip SDK config | `boards/<CHIP>/sdkconfig.board` |
+| **Runtime** | Pin assignments, capabilities, devices | `manifests/*.json` → `/lib/board.json` on device |
 
-### Memory Profiles
-
-Instead of creating separate board directories for each flash/PSRAM variant (N8R2, N16R8, N16R2, etc.), we use **memory profiles** that can be combined with a base chip configuration:
-
-| Profile | Flash | PSRAM | Chips |
-|---------|-------|-------|-------|
-| `8mb_2mb_quad` | 8MB | 2MB Quad | ESP32-S3 (default) |
-| `16mb_8mb_oct` | 16MB | 8MB Octal | ESP32-S3 |
-| `16mb_2mb_quad` | 16MB | 2MB Quad | ESP32-S3 (RetroVMS) |
-
-### Building
+### Building Locally
 
 ```bash
-# Build for ESP32-S3 with 8MB flash (default profile)
-BOARD=ESP32_S3 ./build.sh
+# Build for ESP32-S3 with 8MB flash
+BOARD=ESP32_S3 MANIFEST=generic_esp32s3 ./build.sh
 
-# Build for ESP32-S3 with 16MB flash/8MB PSRAM
-BOARD=ESP32_S3 MEMORY_PROFILE=16MB_8MB ./build.sh
+# Build for ESP32-S3 with 16MB flash
+BOARD=ESP32_S3_16MB MANIFEST=generic_esp32s3 ./build.sh
 
-# Build for specific product with manifest
-BOARD=ESP32_S3 MANIFEST=retrovms_mini ./build.sh
+# Build for specific product with custom manifest
+BOARD=ESP32_S3_16MB MANIFEST=retrovms_mini ./build.sh
+
+# Build for ESP32-P4
+BOARD=ESP32_P4 MANIFEST=generic_esp32p4 ./build.sh
 ```
+
+### Adding a New Product
+
+1. **Create the manifest** in `boards/manifests/{product}.json`:
+```json
+{
+  "identity": {
+    "id": "my_product",
+    "name": "My Product",
+    "chip": "ESP32-S3",
+    "description": "..."
+  },
+  "capabilities": { ... },
+  "resources": {
+    "pins": { ... },
+    "can": { ... },
+    "spi": { ... }
+  },
+  "devices": { ... }
+}
+```
+
+2. **Add to build matrix** in `.github/build-matrix.json`:
+```json
+{
+  "board": "ESP32_S3_16MB",
+  "target": "esp32s3",
+  "manifest": "my_product",
+  "artifact_name": "My_Product",
+  "description": "My awesome product"
+}
+```
+
+3. **Push to master** - GHA will build and deploy firmware automatically
 
 ### Adding a New Chip Family
 
@@ -63,16 +110,12 @@ BOARD=ESP32_S3 MANIFEST=retrovms_mini ./build.sh
    - `mpconfigboard.h` - MicroPython board config
    - `mpconfigboard.cmake` - CMake includes
    - `sdkconfig.board` - Chip-specific Kconfig
-   - `partitions/` - Partition tables for different flash sizes
+   - `partitions-*.csv` - Partition tables
 
-2. Add memory profile(s) if new configurations needed
+2. Create `boards/manifests/generic_<chip>.json`
 
-3. Add manifest(s) to `scripto-studio-registry/Boards/`
+3. Add entry to `.github/build-matrix.json`
 
-### Legacy Board Directories
+### Web Flasher
 
-The following directories are maintained for backward compatibility but are deprecated:
-- `ESP32_S3_N8R2/` → Use `ESP32_S3` with default profile
-- `SCRIPTO_S3/` → Use `ESP32_S3` with 16MB profile
-- `RETROVMS_MINI/` → Use `ESP32_S3` with 16MB profile + manifest
-- `SCRIPTO_P4/` → Use `ESP32_P4`
+The web flasher at `https://jetpax.github.io/pyDirect/` dynamically discovers available firmware from GitHub Releases and populates a dropdown based on detected chip family.
