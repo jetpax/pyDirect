@@ -105,6 +105,10 @@ jobs:
             python3 ../pyDirect/tools/ci_update_dependencies.py \
               ports/esp32/main/idf_component.yml \
               ports/esp32/esp32_common.cmake
+            
+            # Create missing mspi include directories (may be stripped from Docker image)
+            mkdir -p /opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include
+            mkdir -p /opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s2/include
             echo "✅ Patches and dependencies applied"
             
             # Initialize submodules (required for berkeley-db, etc.)
