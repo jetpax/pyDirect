@@ -142,7 +142,7 @@ jobs:
             MICROPY_BOARD_DIR=../../../pyDirect/boards/${{ matrix.board }} \
             BOARD=${{ matrix.board }} \
             MANIFEST=${{ matrix.manifest }} \
-            bash ../../../pyDirect/build.sh
+            bash ../../../pyDirect/build.sh merge
             
             echo "✅ Build complete!"
             ls -lh build-${{ matrix.board }}/*.bin

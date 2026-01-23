@@ -204,7 +204,17 @@
     
     <!-- Device info (shown after detection) -->
     <div id="deviceInfo" class="device-info">
-      <h2>✓ Device Detected</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <h2 style="margin: 0;">✓ Device Detected</h2>
+        <span id="connStatus" style="
+          background: var(--success);
+          color: white;
+          padding: 0.25rem 0.75rem;
+          border-radius: 1rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+        ">● Connected</span>
+      </div>
       <div class="info-grid">
         <div class="info-item">
           <span class="info-label">Chip</span>
@@ -471,7 +481,7 @@
         releaseInfo = await resp.json();
         console.log('Latest release:', releaseInfo.tag_name);
 
-        // Find all merged firmware files
+        // Find merged firmware files only
         const firmwareAssets = releaseInfo.assets.filter(a => 
           a.name.startsWith('pyDirect-') && a.name.endsWith('-merged.bin')
         );
@@ -754,8 +764,7 @@
         detectedMacAddress = result.macAddress;
 
         // Update button and show flash button
-        connectBtn.textContent = '✓ Connected';
-        connectBtn.style.background = 'var(--success)';
+        connectBtn.style.display = 'none';  // Hide connect button, status shown in device card
         
         // Show the flash button and debug button (port stays open)
         flashBtn.style.display = 'block';
