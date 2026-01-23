@@ -23,9 +23,9 @@ print("")
 print("Sending frames...")
 for i in range(5):
     msg_id = 0x100 + i
-    data = bytes([i, i+1, i+2, i+3])
-    can.send(msg_id, data)
-    print(f"Sent: ID=0x{msg_id:03x}, Data={data.hex()}")
+    data = [i, i+1, i+2, i+3]
+    can.send(data, msg_id)  # Note: data first, then id
+    print(f"Sent: ID=0x{msg_id:03x}, Data={data}")
     time.sleep_ms(100)
 
 print("")
@@ -33,11 +33,11 @@ print("Receiving frames...")
 
 # Receive frames (in loopback mode, we'll receive what we sent)
 for i in range(5):
-    msg_id, data = can.recv(timeout=1000)
-    if msg_id is not None:
-        print(f"Received: ID=0x{msg_id:03x}, Data={data.hex()}")
+    if can.any():
+        msg = can.recv()  # Returns (id, extended, rtr, data)
+        print(f"Received: ID=0x{msg[0]:03x}, Data={msg[3]}")
     else:
-        print("Timeout - no message received")
+        print("No message available")
 
 print("")
 print("Done! For real hardware:")
