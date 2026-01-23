@@ -5,11 +5,14 @@
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.5.1-blue)](https://github.com/espressif/esp-idf)
 [![MicroPython](https://img.shields.io/badge/MicroPython-v1.27+-green)](https://micropython.org/)
 
-**pyDirect** is a suite of high-performance C modules for embedded Python environments, with initial focus on MicroPython ESP32 platforms. These modules provide production-ready functionality for networking, communication protocols, and device connectivity.
+**pyDirect** is a suite of high-performance C components for embedded Python environments, with initial focus on MicroPython ESP32 platforms. These components provide production-ready functionality for networking, communication protocols, and device connectivity.
 
-## 📦 Included Modules
+It is hoped that some or all of these components will be upstreamed to MicroPython eventually, but in the meantime, they are available here for use in your projects, together with a build system that allows you to build them for your specific board and MicroPython version.
 
-| Module | Description |
+
+## 📦 Included Components
+
+| Component | Description |
 |--------|-------------|
 | ![httpserver](https://img.shields.io/badge/httpserver-HTTP%2FHTTPS%20Server-6366f1) | Complete HTTP/HTTPS server with WebSocket support |
 | ![webrepl](https://img.shields.io/badge/webrepl-Remote%20REPL-8b5cf6) | WebSocket & WebRTC remote Python access |
@@ -20,13 +23,6 @@
 | ![husarnet](https://img.shields.io/badge/husarnet-P2P%20VPN-0ea5e9) | Zero-config global device connectivity |
 | ![usbmodem](https://img.shields.io/badge/usbmodem-LTE%2F4G%2F5G-14b8a6) | USB Host cellular modem support |
 
-## 🎯 Project Goals
-
-- **Platform-Agnostic**: "Embedded Python" focused, not tied to MicroPython specifics
-- **Production-Ready**: Battle-tested modules for real-world applications  
-- **Modular Design**: Include only what you need
-- **High Performance**: Critical paths implemented in C
-- **Open Source**: MIT licensed, ready for commercial use
 
 ## 🚀 Quick Start
 
@@ -47,19 +43,21 @@ Flash pyDirect directly from your browser - no tools required:
 Download pre-built firmware for your board from [Releases](https://github.com/jetpax/pyDirect/releases):
 
 ```bash
-# Flash firmware (example for SCRIPTO_P4)
-esptool.py --chip esp32p4 --port /dev/ttyUSB0 write_flash -z 0x0 pyDirect-SCRIPTO_P4-v1.27.0.bin
+# Flash firmware (example for ESP32-S3)
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 write_flash -z 0x0 pyDirect-ESP32_S3-merged.bin
 ```
 
 ### Build from Source
 
 ```bash
-# Clone pyDirect
+# Clone pyDirect and MicroPython
 git clone https://github.com/jetpax/pyDirect.git
-cd pyDirect
+git clone https://github.com/micropython/micropython.git
+cd micropython && git checkout v1.27.0
 
 # Build for your board (requires ESP-IDF v5.5.1)
-./build.sh SCRIPTO_P4 all --flash
+cd ../pyDirect
+BOARD=ESP32_S3 MANIFEST=generic_esp32s3 ./build.sh
 ```
 
 See [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md) for detailed build instructions.
@@ -169,47 +167,39 @@ USB Host mode support for cellular modems (LTE/4G/5G).
 
 ## 🔧 Build System
 
-### Using build.sh (Recommended)
+### Using build.sh
 
 ```bash
-# Build for specific board with all modules
-./build.sh SCRIPTO_P4 all
+# Build for ESP32-S3 (8MB)
+BOARD=ESP32_S3 MANIFEST=generic_esp32s3 ./build.sh
 
-# Build with specific modules only
-./build.sh SCRIPTO_S3 httpserver can webrtc
+# Build for ESP32-S3 (16MB)
+BOARD=ESP32_S3_16MB MANIFEST=generic_esp32s3 ./build.sh
 
-# Exclude specific modules
-./build.sh SCRIPTO_P4 all -usbmodem
+# Build for ESP32-P4
+BOARD=ESP32_P4 MANIFEST=generic_esp32p4 ./build.sh
 
-# Build and flash
-./build.sh SCRIPTO_P4 all --flash
-
-# Clean build
-./build.sh SCRIPTO_P4 all --clean
+# Build for specific product (with custom board manifest)
+BOARD=ESP32_S3_16MB MANIFEST=retrovms_mini ./build.sh
 ```
 
 ### Supported Boards
 
-- **SCRIPTO_P4** - ESP32-P4 based board
-- **SCRIPTO_S3** - ESP32-S3 based board
-- **RETROVMS_MINI** - Compact ESP32-S3 variant
+| Board | Chip | Flash | Description |
+|-------|------|-------|-------------|
+| `ESP32_S3` | ESP32-S3 | 8MB | Generic dev boards (N8R2) |
+| `ESP32_S3_16MB` | ESP32-S3 | 16MB | Extended flash boards |
+| `ESP32_P4` | ESP32-P4 | 16MB | With C6 WiFi coprocessor |
 
-Custom boards can be added in `boards/` directory.
+### Build Matrix
 
-### Module Configuration
+All automated builds are defined in `.github/build-matrix.json`. To add a new product:
 
-Modules are enabled via CMake options:
+1. Create manifest: `boards/manifests/{product}.json`
+2. Add entry to `.github/build-matrix.json`
+3. Push to master - GHA builds automatically
 
-```cmake
--DMODULE_PYDIRECT_HTTPSERVER=ON   # HTTP/HTTPS server
--DMODULE_PYDIRECT_WEBREPL=ON      # WebREPL (requires httpserver or webrtc)
--DMODULE_PYDIRECT_WEBRTC=ON       # WebRTC DataChannel
--DMODULE_PYDIRECT_CAN=ON          # CAN bus
--DMODULE_PYDIRECT_GVRET=ON        # GVRET (requires can)
--DMODULE_PYDIRECT_HUSARNET=ON     # Husarnet P2P VPN
--DMODULE_PYDIRECT_USBMODEM=ON     # USB modem
--DMODULE_PYDIRECT_PLC=ON          # PLC/V2G protocol
-```
+See [boards/README.md](boards/README.md) for details.
 
 ## 📖 Usage Examples
 
@@ -335,20 +325,7 @@ See [.github/workflows/build-firmware.yml](.github/workflows/build-firmware.yml)
 
 ### HTTPS/WSS Support
 
-All network modules support TLS/SSL:
-
-```python
-# Enable HTTPS in main.py
-HTTPS_ENABLED = True
-HTTPS_CERT_FILE = '/certs/servercert.pem'
-HTTPS_KEY_FILE = '/certs/prvtkey.pem'
-```
-
-Generate certificates with the included script:
-
-```bash
-./generate-device-cert.sh 2b88 192.168.1.32
-```
+All network modules support TLS/SSL. Certificates are automatically generated during the browser-based provisioning flow.
 
 See [docs/PRODUCTION_CERTIFICATES.md](docs/PRODUCTION_CERTIFICATES.md) for details.
 
