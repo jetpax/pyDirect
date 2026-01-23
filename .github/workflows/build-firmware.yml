@@ -109,7 +109,7 @@ jobs:
             
             # Initialize submodules (required for berkeley-db, etc.)
             echo "📦 Initializing submodules..."
-            make -C ports/esp32 BOARD=${{ matrix.board }} submodules
+            git submodule update --init --recursive lib/berkeley-db-1.xx lib/micropython-lib
             echo "✅ Submodules initialized"
             
             # Build MicroPython cross-compiler
