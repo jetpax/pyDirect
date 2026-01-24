@@ -1,4 +1,4 @@
-# pyDirect: Fast path acceleration for Modules for Embedded Python 
+# pyDirect: Fast path acceleration for MicroPython on ESP32
 
 [![Build Firmware](https://github.com/jetpax/pyDirect/actions/workflows/build-firmware.yml/badge.svg)](https://github.com/jetpax/pyDirect/actions/workflows/build-firmware.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
