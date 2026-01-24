@@ -111,17 +111,16 @@ jobs:
             cd micropython
             echo "✅ Cloned MicroPython ${{ needs.check-version.outputs.mpy_version }}"
             
-            # Update dependencies and apply ESP-IDF workarounds using Python script
-            echo "📦 Applying patches and dependencies..."
-            python3 ../pyDirect/tools/ci_update_dependencies.py \
-              ports/esp32/main/idf_component.yml \
-              ports/esp32/esp32_common.cmake \
-              ports/esp32/mpconfigport.h
+            # Apply pyDirect patches to MicroPython
+            echo "📦 Applying pyDirect patches..."
+            git apply ../pyDirect/docs/patches/001-esp32-http-server-components.patch
+            git apply ../pyDirect/docs/patches/002-esp32-managed-components.patch
+            git apply ../pyDirect/docs/patches/004-esp32-dupterm-slots.patch
+            echo "✅ All patches applied"
             
             # Create missing mspi include directories (may be stripped from Docker image)
             mkdir -p /opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s3/include
             mkdir -p /opt/esp/idf/components/esp_hw_support/mspi_timing_tuning/port/esp32s2/include
-            echo "✅ Patches and dependencies applied"
             
             # Install mklittlefs for VFS partition creation
             echo "📦 Installing mklittlefs..."

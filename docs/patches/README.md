@@ -9,6 +9,7 @@ These patches add the minimal required changes to MicroPython for pyDirect modul
 | `001-esp32-http-server-components.patch` | Adds `esp_http_server` + `esp_https_server` IDF components |
 | `002-esp32-managed-components.patch` | Adds `littlefs` + `husarnet` managed components |
 | `003-esp-idf-rmt-log-suppression.patch` | Suppresses RMT resolution loss warnings (ESP-IDF) |
+| `004-esp32-dupterm-slots.patch` | Increases dupterm slots from 1 to 3 for WebREPL + WebRTC |
 
 ## Applying Patches to MicroPython 1.27+
 
@@ -21,6 +22,7 @@ git checkout v1.27.0  # or whatever tag
 # Apply MicroPython patches
 git apply /path/to/pyDirect/docs/patches/001-esp32-http-server-components.patch
 git apply /path/to/pyDirect/docs/patches/002-esp32-managed-components.patch
+git apply /path/to/pyDirect/docs/patches/004-esp32-dupterm-slots.patch
 
 # Initialize submodules
 make -C mpy-cross

@@ -1,0 +1,29 @@
+From: pyDirect <pyDirect@scripto.studio>
+Subject: [PATCH 4/4] esp32: Increase dupterm slots from 1 to 3 for pyDirect
+
+pyDirect WebREPL binary protocol requires 3 dupterm slots:
+  - Slot 0: UART console
+  - Slot 1: WebRTC (webrepl_rtc)  
+  - Slot 2: WebSocket (webrepl_binary)
+
+Stock MicroPython v1.27.0 has only 1 slot.
+
+---
+ ports/esp32/mpconfigport.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ports/esp32/mpconfigport.h b/ports/esp32/mpconfigport.h
+index abc123..def456 100644
+--- a/ports/esp32/mpconfigport.h
++++ b/ports/esp32/mpconfigport.h
+@@ -109,7 +109,7 @@
+ 
+ #define MICROPY_PY_RANDOM_SEED_INIT_FUNC    (esp_random())
+ #define MICROPY_PY_OS_INCLUDEFILE           "ports/esp32/modos.c"
+-#define MICROPY_PY_OS_DUPTERM               (1)
++#define MICROPY_PY_OS_DUPTERM               (3)
+ #define MICROPY_PY_OS_DUPTERM_NOTIFY        (1)
+ #define MICROPY_PY_OS_SYNC                  (1)
+ #define MICROPY_PY_OS_UNAME                 (1)
+-- 
+2.39.0
