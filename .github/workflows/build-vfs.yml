@@ -1,0 +1,233 @@
+# VFS-only rebuild workflow
+# Rebuilds only the VFS partition and merged firmware when device-scripts change
+# Much faster than full firmware rebuild (~2 min vs 15+ min)
+
+name: Build VFS Partition
+
+on:
+  push:
+    paths:
+      - 'device-scripts/**'
+      - 'boards/*/device-scripts/**'
+      - '.github/workflows/build-vfs.yml'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild even if no device-scripts changes'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  load-matrix:
+    name: Load Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: |
+          MATRIX=$(cat .github/build-matrix.json | jq -c '.builds')
+          echo "matrix={\"include\":$MATRIX}" >> $GITHUB_OUTPUT
+
+  build-vfs:
+    name: VFS ${{ matrix.artifact_name }}
+    needs: load-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.load-matrix.outputs.matrix) }}
+      fail-fast: false
+    
+    steps:
+      - name: Checkout pyDirect
+        uses: actions/checkout@v4
+        with:
+          path: pyDirect
+      
+      - name: Install mklittlefs
+        run: |
+          wget -q https://github.com/earlephilhower/mklittlefs/releases/download/4.1.0/x86_64-linux-gnu-mklittlefs-42acb97.tar.gz
+          tar -xzf x86_64-linux-gnu-mklittlefs-42acb97.tar.gz --strip-components=1
+          sudo mv mklittlefs /usr/local/bin/
+          sudo chmod +x /usr/local/bin/mklittlefs
+          rm x86_64-linux-gnu-mklittlefs-42acb97.tar.gz
+          echo "✅ mklittlefs installed"
+      
+      - name: Install esptool
+        run: |
+          pip install esptool
+          echo "✅ esptool installed"
+      
+      - name: Download firmware components
+        id: download-firmware
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: build-firmware.yml
+          name: firmware-${{ matrix.artifact_name }}
+          path: firmware-components
+          if_no_artifact_found: warn
+        continue-on-error: true
+      
+      - name: Check firmware availability
+        id: check-firmware
+        run: |
+          if [ -f "firmware-components/micropython.bin" ]; then
+            echo "has_firmware=true" >> $GITHUB_OUTPUT
+            echo "✅ Firmware components found"
+          else
+            echo "has_firmware=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No firmware components - run build-firmware.yml first"
+          fi
+      
+      - name: Build VFS partition
+        if: steps.check-firmware.outputs.has_firmware == 'true'
+        run: |
+          cd pyDirect
+          
+          BOARD="${{ matrix.board }}"
+          BOARD_DIR="./boards/${BOARD}"
+          
+          # Determine which device-scripts to use
+          if [ -d "${BOARD_DIR}/device-scripts" ]; then
+            SCRIPTS_DIR="${BOARD_DIR}/device-scripts"
+            echo "📂 Using board-specific device-scripts: ${SCRIPTS_DIR}"
+          else
+            SCRIPTS_DIR="./device-scripts"
+            echo "📂 Using common device-scripts: ${SCRIPTS_DIR}"
+          fi
+          
+          # Copy runtime manifest to scripts
+          MANIFEST_FILE="./boards/manifests/${{ matrix.manifest }}.json"
+          if [ -f "$MANIFEST_FILE" ]; then
+            mkdir -p "${SCRIPTS_DIR}/lib"
+            cp "$MANIFEST_FILE" "${SCRIPTS_DIR}/lib/board.json"
+            echo "📋 Copied manifest: ${{ matrix.manifest }}.json → lib/board.json"
+          fi
+          
+          # Get VFS size from partition table
+          PARTITION_FILE=$(find "${BOARD_DIR}" -name "partitions*.csv" | head -1)
+          if [ -z "$PARTITION_FILE" ]; then
+            echo "❌ Partition table not found in ${BOARD_DIR}"
+            exit 1
+          fi
+          
+          VFS_LINE=$(grep "^vfs," "$PARTITION_FILE")
+          VFS_SIZE=$(echo "$VFS_LINE" | cut -d',' -f5 | xargs)
+          
+          # Convert hex size if needed
+          if [[ "$VFS_SIZE" == 0x* ]]; then
+            VFS_SIZE=$((VFS_SIZE))
+          fi
+          
+          echo "📦 Creating VFS partition (size: $VFS_SIZE bytes)..."
+          
+          mklittlefs \
+            -c "${SCRIPTS_DIR}" \
+            -b 4096 \
+            -p 256 \
+            -s "$VFS_SIZE" \
+            "../firmware-components/vfs.bin"
+          
+          echo "✅ VFS partition created"
+          ls -lh ../firmware-components/vfs.bin
+      
+      - name: Create merged firmware
+        if: steps.check-firmware.outputs.has_firmware == 'true'
+        run: |
+          cd pyDirect
+          
+          BOARD="${{ matrix.board }}"
+          BOARD_DIR="./boards/${BOARD}"
+          
+          # Get partition info
+          PARTITION_FILE=$(find "${BOARD_DIR}" -name "partitions*.csv" | head -1)
+          VFS_LINE=$(grep "^vfs," "$PARTITION_FILE")
+          VFS_OFFSET=$(echo "$VFS_LINE" | cut -d',' -f4 | xargs)
+          
+          # Detect chip type
+          CHIP="${{ matrix.target }}"
+          
+          # Get flash size from sdkconfig
+          FLASH_SIZE="8MB"
+          if [ -f "${BOARD_DIR}/sdkconfig.board" ]; then
+            if grep -q "CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y" "${BOARD_DIR}/sdkconfig.board"; then
+              FLASH_SIZE="16MB"
+            elif grep -q "CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y" "${BOARD_DIR}/sdkconfig.board"; then
+              FLASH_SIZE="4MB"
+            fi
+          fi
+          
+          echo "📦 Creating merged firmware..."
+          echo "   Chip: $CHIP"
+          echo "   Flash: $FLASH_SIZE"
+          echo "   VFS offset: $VFS_OFFSET"
+          
+          esptool.py --chip "$CHIP" merge_bin \
+            --fill-flash-size "$FLASH_SIZE" \
+            --flash_mode dio \
+            --flash_freq 80m \
+            --flash_size "$FLASH_SIZE" \
+            -o "../firmware-components/pyDirect-${{ matrix.artifact_name }}-merged.bin" \
+            0x0 "../firmware-components/bootloader/bootloader.bin" \
+            0x8000 "../firmware-components/partition_table/partition-table.bin" \
+            0x10000 "../firmware-components/micropython.bin" \
+            $VFS_OFFSET "../firmware-components/vfs.bin"
+          
+          echo "✅ Merged firmware created"
+          ls -lh ../firmware-components/pyDirect-${{ matrix.artifact_name }}-merged.bin
+      
+      - name: Upload VFS artifact
+        if: steps.check-firmware.outputs.has_firmware == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vfs-${{ matrix.artifact_name }}
+          path: firmware-components/vfs.bin
+          retention-days: 90
+      
+      - name: Upload merged firmware
+        if: steps.check-firmware.outputs.has_firmware == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-${{ matrix.artifact_name }}
+          path: firmware-components/pyDirect-${{ matrix.artifact_name }}-merged.bin
+          retention-days: 90
+
+  update-docs:
+    name: Update Web Flasher
+    needs: [load-matrix, build-vfs]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout pyDirect
+        uses: actions/checkout@v4
+      
+      - name: Download all merged firmware
+        uses: actions/download-artifact@v4
+        with:
+          pattern: merged-*
+          path: merged-artifacts
+          merge-multiple: true
+      
+      - name: Update docs/firmware
+        run: |
+          # Copy merged firmware to docs/firmware for web flasher
+          mkdir -p docs/firmware
+          find merged-artifacts -name "*.bin" -exec cp {} docs/firmware/ \;
+          echo "📦 Updated docs/firmware:"
+          ls -lh docs/firmware/
+      
+      - name: Commit firmware updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/firmware/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update VFS firmware [skip ci]"
+            git push
+          fi
