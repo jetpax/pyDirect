@@ -122,17 +122,54 @@ def fix_mspi_include_dir(cmake_path):
     except Exception as e:
         print(f"⚠️  Could not fix mspi include directory: {e}")
 
+def patch_dupterm_slots(mpconfigport_path):
+    """Patch mpconfigport.h to enable 3 dupterm slots.
+    
+    pyDirect WebREPL binary protocol requires 3 slots:
+      - Slot 0: UART console
+      - Slot 1: WebRTC (webrepl_rtc)
+      - Slot 2: WebSocket (webrepl_binary)
+    
+    Default ESP32 MicroPython has only 2 slots.
+    """
+    print(f"🔧 Patching {mpconfigport_path} for 3 dupterm slots...")
+    
+    try:
+        with open(mpconfigport_path, 'r') as f:
+            content = f.read()
+        
+        # Look for the existing MICROPY_PY_OS_DUPTERM definition
+        old_pattern = '#define MICROPY_PY_OS_DUPTERM               (2)'
+        new_value = '#define MICROPY_PY_OS_DUPTERM               (3)  // pyDirect: 3 slots for UART + WebRTC + WebSocket'
+        
+        if old_pattern in content:
+            content = content.replace(old_pattern, new_value)
+            with open(mpconfigport_path, 'w') as f:
+                f.write(content)
+            print("✅ Patched MICROPY_PY_OS_DUPTERM from 2 to 3")
+        elif '(3)' in content and 'MICROPY_PY_OS_DUPTERM' in content:
+            print("ℹ️  MICROPY_PY_OS_DUPTERM already set to 3")
+        else:
+            print("⚠️  Could not find MICROPY_PY_OS_DUPTERM pattern to patch")
+    except FileNotFoundError:
+        print(f"❌ File not found: {mpconfigport_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"⚠️  Could not patch dupterm slots: {e}")
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python3 ci_update_dependencies.py <idf_component.yml> <esp32_common.cmake>")
+        print("Usage: python3 ci_update_dependencies.py <idf_component.yml> <esp32_common.cmake> [mpconfigport.h]")
         sys.exit(1)
 
     idf_comp_path = sys.argv[1]
     cmake_path = sys.argv[2]
+    mpconfigport_path = sys.argv[3] if len(sys.argv) > 3 else None
     
     update_idf_component_yml(idf_comp_path)
     update_esp32_common_cmake(cmake_path)
     apply_mspi_workaround()
     fix_mspi_include_dir(cmake_path)
-
-
+    
+    if mpconfigport_path:
+        patch_dupterm_slots(mpconfigport_path)

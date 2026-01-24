@@ -378,6 +378,66 @@
       </div>
     </div>
     
+    <!-- Flash Complete Modal -->
+    <div id="flashCompleteModal" style="
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    ">
+      <div style="
+        background: var(--card-bg);
+        border-radius: 1rem;
+        padding: 2rem;
+        max-width: 420px;
+        width: 90%;
+        text-align: center;
+        border: 2px solid var(--success);
+        box-shadow: 0 0 40px rgba(16, 185, 129, 0.3);
+      ">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+        <h2 style="color: white; margin: 0 0 0.5rem 0;">Flash Complete!</h2>
+        <p style="color: #94a3b8; margin: 0 0 1.5rem 0; font-size: 0.95rem;">
+          pyDirect firmware has been installed successfully.<br>
+          Your device is ready for WiFi configuration.
+        </p>
+        <button id="proceedWifiSetupBtn" style="
+          width: 100%;
+          padding: 1rem 1.5rem;
+          background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+          color: white;
+          font-size: 1.1rem;
+          font-weight: 600;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          margin-bottom: 0.75rem;
+          transition: all 0.2s;
+        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 25px rgba(139, 92, 246, 0.3)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+          📡 Configure WiFi Now
+        </button>
+        <button id="skipWifiSetupBtn" style="
+          width: 100%;
+          padding: 0.75rem 1.5rem;
+          background: #374151;
+          color: #9ca3af;
+          font-size: 0.9rem;
+          border: none;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          transition: all 0.2s;
+        " onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#374151'">
+          Skip - I'll configure later
+        </button>
+      </div>
+    </div>
+    
     <p class="requirements">
       Requires Chrome, Edge, or Opera on desktop.<br>
       <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API#browser_compatibility" target="_blank">Browser compatibility</a>
@@ -893,39 +953,49 @@ print('KEY_OK')
       addDebugLog('> Certificates installed!');
     }
 
-    // Wire up the REPL WiFi setup button
-    wifiSetupBtn.addEventListener('click', async () => {
-      if (!currentPort || !currentLoader) {
-        alert('No device connected. Please connect first.');
-        return;
+    // Core WiFi setup function - can be called after flash or from button
+    async function performWifiSetup(needsReconnect = false) {
+      const debugLog = document.getElementById('debugLog');
+      debugLog.style.display = 'block';
+      debugLog.innerHTML = '';
+      
+      function addDebugLog(msg) {
+        const line = document.createElement('div');
+        line.textContent = msg;
+        debugLog.appendChild(line);
+        debugLog.scrollTop = debugLog.scrollHeight;
       }
-
+      
       try {
-        wifiSetupBtn.textContent = 'Rebooting to MicroPython...';
+        wifiSetupBtn.style.display = 'block';
+        wifiSetupBtn.textContent = 'Connecting to device...';
         wifiSetupBtn.disabled = true;
-
-        // Show debug log
-        const debugLog = document.getElementById('debugLog');
-        debugLog.style.display = 'block';
-        debugLog.innerHTML = '';
         
-        function addDebugLog(msg) {
-          const line = document.createElement('div');
-          line.textContent = msg;
-          debugLog.appendChild(line);
-          debugLog.scrollTop = debugLog.scrollHeight;
+        if (needsReconnect) {
+          addDebugLog('> Reconnecting to device at 115200 baud...');
+          
+          // Need to request serial port again after flash
+          currentPort = await navigator.serial.requestPort();
+          await currentPort.open({ baudRate: 115200 });
+          currentLoader = null; // We're in MicroPython mode now, not bootloader
+          
+          addDebugLog('> Connected! Resetting device...');
+        } else {
+          addDebugLog('> Switching to 115200 and resetting...');
+          
+          // Disconnect loader if we have one
+          if (currentLoader) {
+            await currentLoader.disconnect();
+            currentLoader = null;
+          }
+          
+          // Close and reopen at MicroPython baud rate
+          await currentPort.close();
+          await new Promise(resolve => setTimeout(resolve, 100));
+          await currentPort.open({ baudRate: 115200 });
         }
-
-        addDebugLog('> Switching to 115200 and resetting...');
         
-        // Disconnect loader (don't need it anymore)
-        await currentLoader.disconnect();
-        currentLoader = null;
-        
-        // Close and reopen at MicroPython baud rate FIRST
-        await currentPort.close();
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await currentPort.open({ baudRate: 115200 });
+        wifiSetupBtn.textContent = 'Resetting device...';
         
         // Now send reset signals (correct sequence for normal boot, not download mode)
         // DTR=false keeps GPIO0 high (normal boot mode)
@@ -960,15 +1030,14 @@ print('KEY_OK')
         }
         bootReader.releaseLock();
         
-        // Send Ctrl+C IMMEDIATELY after releasing reader
-        if (bannerFound) {
-          addDebugLog('> Sending interrupt...');
-          const writer = currentPort.writable.getWriter();
-          await writer.write(new Uint8Array([0x03])); // Ctrl+C
-          await new Promise(r => setTimeout(r, 50));
-          await writer.write(new Uint8Array([0x03])); // Ctrl+C again
-          writer.releaseLock();
-        }
+        // Send Ctrl+C to interrupt any running script
+        // We do this whether or not we saw the banner (device may have already booted)
+        addDebugLog(`> Sending interrupt...${bannerFound ? '' : ' (no banner detected, device may be at REPL)'}`);
+        const writer = currentPort.writable.getWriter();
+        await writer.write(new Uint8Array([0x03])); // Ctrl+C
+        await new Promise(r => setTimeout(r, 50));
+        await writer.write(new Uint8Array([0x03])); // Ctrl+C again
+        writer.releaseLock();
         
         // Brief pause for interrupt to take effect
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -1229,7 +1298,45 @@ print("SETUP_MODE_SET")
         currentPort = null;
         currentLoader = null;
       }
+    }
+    
+    // Wire up the REPL WiFi setup button
+    wifiSetupBtn.addEventListener('click', async () => {
+      if (!currentPort && !currentLoader) {
+        // No active connection - need to reconnect
+        await performWifiSetup(true);
+      } else {
+        // Have a connection (either from bootloader or already in MicroPython)
+        await performWifiSetup(false);
+      }
     });
+    
+    // Wire up Flash Complete modal buttons
+    document.getElementById('proceedWifiSetupBtn').addEventListener('click', async () => {
+      // Hide the modal
+      document.getElementById('flashCompleteModal').style.display = 'none';
+      // Start WiFi setup - we have the port reference, just need to switch baud rate
+      await performWifiSetup(false);
+    });
+    
+    document.getElementById('skipWifiSetupBtn').addEventListener('click', async () => {
+      // Hide the modal
+      document.getElementById('flashCompleteModal').style.display = 'none';
+      // Reset UI elements
+      connectBtn.textContent = 'Connect & Install pyDirect';
+      connectBtn.disabled = false;
+      connectBtn.style.background = 'var(--primary)';
+      connectBtn.style.display = 'block';
+      flashBtn.style.display = 'none';
+      wifiSetupBtn.style.display = 'none';
+      // Clean up serial connection
+      try {
+        if (currentPort) await currentPort.close();
+      } catch (e) {}
+      currentPort = null;
+      currentLoader = null;
+    });
+
     // Wire up the flash button
     flashBtn.addEventListener('click', async () => {
       if (!currentPort || !currentLoader) {
@@ -1270,6 +1377,18 @@ print("SETUP_MODE_SET")
         const data = new Uint8Array(await firmwareResp.arrayBuffer());
         console.log(`Downloaded ${data.length} bytes`);
         
+        // Verify bootloader connection is still valid
+        flashBtn.textContent = 'Syncing with device...';
+        try {
+          await currentLoader.sync();
+          console.log('Bootloader sync successful');
+        } catch (syncErr) {
+          console.warn('Sync failed, trying to reinitialize...', syncErr);
+          // Try to reinitialize the connection
+          await currentLoader.initialize();
+          console.log('Reinitialize successful');
+        }
+        
         // Flash merged firmware at offset 0
         flashBtn.textContent = 'Flashing...';
         console.log('About to call flashData...');
@@ -1288,11 +1407,14 @@ print("SETUP_MODE_SET")
         } catch (flashError) {
           // Check if this is the finalization timeout (device already rebooted)
           const errorMsg = flashError?.message || String(flashError);
-          if (errorMsg.includes('Timed out waiting for packet header') && progressPercent === 100) {
+          
+          // If we're at or near 100% and get a timeout, the flash completed and device rebooted
+          if (errorMsg.includes('Timed out waiting for packet header') && progressPercent >= 95) {
             // Flash completed successfully, device rebooted before finalization response
-            console.log('Flash completed successfully (device rebooted)');
+            console.log(`Flash completed successfully (device rebooted at ${progressPercent}%)`);
           } else {
-            console.error('flashData threw an error:', flashError);
+            // Actual error
+            console.error(`Flash failed at ${progressPercent}%:`, flashError);
             throw flashError;
           }
         }
@@ -1300,14 +1422,17 @@ print("SETUP_MODE_SET")
         flashBtn.textContent = '✓ Flash Complete!';
         flashBtn.style.background = '#10b981';
         
-        alert('Firmware flashed successfully! Your device will now restart.');
-
-        // Clean up
+        // Clean up bootloader connection but keep port reference
         try {
-          await currentPort.close();
+          await currentLoader.disconnect();
         } catch (e) {}
-        currentPort = null;
         currentLoader = null;
+        // Note: Don't close currentPort here - performWifiSetup will handle
+        // the close/reopen sequence when user clicks "Configure WiFi Now"
+        
+        // Show the Flash Complete modal
+        const flashCompleteModal = document.getElementById('flashCompleteModal');
+        flashCompleteModal.style.display = 'flex';
 
       } catch (error) {
         console.error('Flash error:', error);
