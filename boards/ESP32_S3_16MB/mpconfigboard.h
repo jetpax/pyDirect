@@ -9,13 +9,13 @@
 #define MICROPY_HW_MCU_NAME                 "ESP32S3"
 #endif
 
-// Enable USB Serial JTAG
-#define MICROPY_HW_USB_CDC                  (1)
+// Disable USB device mode - USB-OTG is used for host mode (USB modem support)
+#define MICROPY_HW_ENABLE_USBDEV            (0)
+#define MICROPY_HW_USB_CDC                  (0)
 
 // Feature flags
 #define MICROPY_HW_ENABLE_SDCARD            (1)
 
-// USB Serial/JTAG packet size
-#ifndef USB_SERIAL_JTAG_PACKET_SZ_BYTES
-#define USB_SERIAL_JTAG_PACKET_SZ_BYTES     (64)
-#endif
+// Disable UART REPL - using WebREPL instead to avoid duplicate output
+#define MICROPY_HW_ENABLE_UART_REPL         (1)
+
