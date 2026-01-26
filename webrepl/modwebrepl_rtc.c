@@ -106,6 +106,61 @@ static const char *TAG = "WBP_RTC";
 #define WBP_EVT_LOG       4  // Structured log message
 
 //=============================================================================
+// CBOR Helper: Extract Byte Data (handles tagged typed arrays)
+//=============================================================================
+
+/**
+ * Safely extract byte data from a CBOR value.
+ * 
+ * This handles both:
+ * - Plain byte strings (CBOR major type 2)
+ * - Tagged typed arrays (Tag 64 used by cbor-web for Uint8Array)
+ * 
+ * If the value is a tag, we skip the tag and extract the inner byte string.
+ * This prevents assertion failures when cbor-web encodes Uint8Array with Tag 64.
+ * 
+ * @param value     Pointer to CborValue to extract from
+ * @param data_out  Output pointer for allocated byte data (caller must free)
+ * @param len_out   Output for data length
+ * @return          CborNoError on success, error code otherwise
+ */
+static CborError cbor_extract_byte_data(CborValue *value, uint8_t **data_out, size_t *len_out) {
+    CborValue inner;
+    CborValue *target = value;
+    
+    // Check if this is a tagged value (e.g., Tag 64 for typed arrays)
+    if (cbor_value_is_tag(value)) {
+        CborTag tag;
+        CborError err = cbor_value_get_tag(value, &tag);
+        if (err != CborNoError) {
+            ESP_LOGE(TAG, "Failed to get CBOR tag: %d", err);
+            return err;
+        }
+        
+        ESP_LOGD(TAG, "CBOR tag detected: %llu", (unsigned long long)tag);
+        
+        // Skip the tag to get to the inner value
+        err = cbor_value_skip_tag(value);
+        if (err != CborNoError) {
+            ESP_LOGE(TAG, "Failed to skip CBOR tag: %d", err);
+            return err;
+        }
+        
+        // Now value points to the inner content
+        target = value;
+    }
+    
+    // Check if the (potentially untagged) value is a byte string
+    if (!cbor_value_is_byte_string(target)) {
+        ESP_LOGE(TAG, "Expected byte string, got CBOR type %d", cbor_value_get_type(target));
+        return CborErrorIllegalType;
+    }
+    
+    // Extract the byte string
+    return cbor_value_dup_byte_string(target, data_out, len_out, NULL);
+}
+
+//=============================================================================
 // Global State (WebRTC-specific)
 //=============================================================================
 
@@ -1785,7 +1840,11 @@ static void handle_file_message(const uint8_t *buf, size_t len) {
             
             uint8_t *data = NULL;
             size_t data_len;
-            if (cbor_value_dup_byte_string(&arrayValue, &data, &data_len, NULL) != CborNoError) {
+            // Use helper to handle both plain byte strings and tagged typed arrays (cbor-web)
+            CborError data_err = cbor_extract_byte_data(&arrayValue, &data, &data_len);
+            if (data_err != CborNoError) {
+                ESP_LOGE(TAG, "FILE_DATA: Invalid data format (CBOR error %d)", data_err);
+                wbp_send_file_error(WBP_ERR_ILLEGAL_OP, "Invalid data format");
                 return;
             }
             
