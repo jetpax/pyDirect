@@ -46,7 +46,7 @@ NEOFETCH_FW_NAME = "RetroVMS-MINI"
 NEOFETCH_TERMINAL = "xterm.js"
 NEOFETCH_COMMAND_PARSER = "webREPL"
 NEOFETCH_AUTHOR = "jetpax"
-NEOFETCH_OS = "MicroPython with \033[3mmpDirect\033[23m"  # \033[3m = italic on, \033[23m = italic off
+NEOFETCH_OS = "MicroPython with \033[3mpyDirect\033[23m"  # \033[3m = italic on, \033[23m = italic off
 
 # Neofetch logo with ANSI color codes
 NEOFETCH_LOGO = (
