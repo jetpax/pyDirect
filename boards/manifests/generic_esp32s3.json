@@ -33,9 +33,8 @@
 
     "can": {
       "can0": {
-        "tx": 20,
-        "rx": 21,
-        "standby": 6
+        "tx": 5,
+        "rx": 4
       }
     },
 
@@ -71,7 +70,7 @@
   "devices": {
     "status_led": {
       "type": "neopixel",
-      "pixel_order": "RGB",
+      "pixel_order": "GRB",
       "description": "Onboard RGB LED (WS2812) on GPIO48"
     }
   },

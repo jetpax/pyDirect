@@ -110,7 +110,7 @@ def getSysInfo():
     # --- Unique ID ---
     try:
         uid_bytes = machine.unique_id()
-        uid = ubinascii.hexlify(uid_bytes).decode().upper()
+        uid = binascii.hexlify(uid_bytes).decode().upper()
         sys_info['uid'] = uid
     except Exception as e:
         sys_info['uid'] = 'Unknown-ID'
@@ -228,7 +228,7 @@ def getSysInfo():
         
         if sta_active:
             try:
-                wifi_info['mac'] = ubinascii.hexlify(sta.config('mac'), ':').decode().upper()
+                wifi_info['mac'] = binascii.hexlify(sta.config('mac'), ':').decode().upper()
             except:
                 wifi_info['mac'] = 'Unknown'
             
@@ -428,7 +428,7 @@ def getNetworksInfo():
         
         if sta_active:
             try:
-                wifi_sta['mac'] = ubinascii.hexlify(sta.config('mac'), ':').decode().upper()
+                wifi_sta['mac'] = binascii.hexlify(sta.config('mac'), ':').decode().upper()
             except:
                 wifi_sta['mac'] = 'Unknown'
             
@@ -480,7 +480,7 @@ def getNetworksInfo():
         
         if ap_active:
             try:
-                wifi_ap['mac'] = ubinascii.hexlify(ap.config('mac'), ':').decode().upper()
+                wifi_ap['mac'] = binascii.hexlify(ap.config('mac'), ':').decode().upper()
             except:
                 wifi_ap['mac'] = 'Unknown'
             
@@ -525,7 +525,7 @@ def getNetworksInfo():
                 lan_status = lan.status()
                 
                 eth_info = {
-                    'mac': ubinascii.hexlify(lan_mac, ':').decode().upper(),
+                    'mac': binascii.hexlify(lan_mac, ':').decode().upper(),
                     'enable': (lan_status != 0 and lan_status != 2),  # 0=down, 2=connecting
                     'linkup': (lan_status == 3 or lan_status == 5),   # 3=up, 5=got_ip
                     'gotip': (lan_status == 5),                       # 5=got_ip
@@ -574,9 +574,9 @@ def getNetworksInfo():
                 # BLE config returns (addr_type, addr)
                 ble_mac = ble.config('mac')
                 if isinstance(ble_mac, tuple) and len(ble_mac) >= 2:
-                    ble_info['mac'] = ubinascii.hexlify(ble_mac[1], ':').decode().upper()
+                    ble_info['mac'] = binascii.hexlify(ble_mac[1], ':').decode().upper()
                 else:
-                    ble_info['mac'] = ubinascii.hexlify(ble_mac, ':').decode().upper()
+                    ble_info['mac'] = binascii.hexlify(ble_mac, ':').decode().upper()
             except:
                 ble_info['mac'] = 'Unknown'
         else:
