@@ -1,4 +1,4 @@
-## IDF Component Manager Dependencies for mpDirect WebRTC
+## IDF Component Manager Dependencies for pyDirect WebRTC
 dependencies:
   # ESP WebRTC solution components
   espressif/esp_peer: "^1.2.2"

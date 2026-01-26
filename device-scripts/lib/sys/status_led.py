@@ -12,6 +12,10 @@ Copyright (c) 2026 Jonathan Peace
 SPDX-License-Identifier: MIT
 """
 
+import time
+import _thread
+from machine import Pin
+
 # ============================================================================
 # Color Constants (based on experimental colors)
 # ============================================================================

@@ -91,7 +91,7 @@ class Settings:
 
     def _resolve_default(self, parts):
         """
-        Resolve default value, supporting computed defaults.
+        Resolve default value from static defaults.
         
         Args:
             parts: Key path parts list
@@ -99,7 +99,7 @@ class Settings:
         Returns:
             Default value or None
         """
-        # Try static defaults first
+        # Try static defaults
         d = self._defaults
         for p in parts:
             if not isinstance(d, dict):
@@ -108,19 +108,7 @@ class Settings:
             if d is None:
                 break
         
-        if d is not None:
-            return d
-        
-        # Computed defaults based on board
-        if self._board:
-            # Example: sleep interval depends on battery capability
-            if parts == ["sleep", "interval"]:
-                try:
-                    return 60 if self._board.has("battery") else 5
-                except:
-                    pass
-        
-        return None
+        return d
 
     def set(self, key, value):
         """
@@ -219,7 +207,7 @@ def _load():
         # Try to get board reference for computed defaults
         board = None
         try:
-            from lib import board as board_module
+            from lib.sys import board as board_module
             board = board_module._load()
         except:
             # Board not available yet or error loading

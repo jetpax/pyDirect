@@ -151,7 +151,7 @@ def start_servers(ip):
     
     # Start WebRTC signaling server (optional)
     try:
-        from lib import webrtc_signaling
+        from lib.sys import webrtc_signaling
         if webrtc_signaling.start():
             _log('info', '✓ WebRTC signaling server started')
         else:
@@ -160,8 +160,6 @@ def start_servers(ip):
         _log('debug', 'WebRTC signaling not available (module not found)')
     except Exception as e:
         _log('error', f'Failed to start WebRTC signaling: {e}')
-        import sys
-        sys.print_exception(e)
     
     # Register WebREPL authentication callback (fires after successful auth)
     try:
@@ -172,8 +170,6 @@ def start_servers(ip):
             _log("error", "webrepl.on_auth() not available - firmware may need update")
     except Exception as e:
         _log("error", f"Failed to register WebREPL auth callback: {e}")
-        import sys
-        sys.print_exception(e)
     
     return True
 

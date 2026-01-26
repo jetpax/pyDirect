@@ -2,10 +2,10 @@
 Board Hardware Definition Module
 
 Provides singleton access to board hardware configuration.
-Loads from /config/board.json with identity/capabilities/resources/devices structure.
+Loads from /settings/board.json with identity/capabilities/resources/devices structure.
 
 Usage:
-    from lib import board
+    from lib.sys import board
     
     # Identity
     board.id.name          # "Scripto P4+C6"
@@ -203,11 +203,11 @@ class Board:
 
 
 def _load():
-    """Load board configuration from /config/board.json."""
+    """Load board configuration from /settings/board.json."""
     global _board
     if _board is None:
         try:
-            with open('/config/board.json', 'r') as f:
+            with open('/settings/board.json', 'r') as f:
                 data = json.load(f)
             _board = Board(data)
         except OSError as e:

@@ -55,7 +55,7 @@ def is_available():
     
     # Check if board has ethernet capability
     try:
-        from lib import board
+        from lib.sys import board
         return board.has("ethernet")
     except:
         return False

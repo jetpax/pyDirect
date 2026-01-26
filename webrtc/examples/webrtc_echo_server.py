@@ -14,7 +14,7 @@ Hardware Required:
 - ESP32-S3 or ESP32-P4 with WiFi
 
 Prerequisites:
-1. Build firmware with MODULE_MPDIRECT_WEBRTC=ON
+1. Build firmware with MODULE_PYDIRECT_WEBRTC=ON
 2. Generate device certificate (see ../../docs/HTTPS_WSS_COMPLETE.md)
 3. Upload certificate to /certs/ on device
 4. Configure WiFi credentials below
