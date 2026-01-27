@@ -527,7 +527,7 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         ESP_LOGI(TAG, "Rx TEXT msg: '%s'", buf);
         handle_ws_message(client_slot, (char*)buf, ws_pkt.len, false);
     } else if (ws_pkt.type == HTTPD_WS_TYPE_BINARY) {
-        ESP_LOGD(TAG, "Rx BINARY msg, len=%d", ws_pkt.len);
+        ESP_LOGI(TAG, "Rx BINARY msg, len=%d", ws_pkt.len);
         handle_ws_message(client_slot, (char*)buf, ws_pkt.len, true);
     }
     

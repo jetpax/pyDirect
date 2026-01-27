@@ -868,6 +868,7 @@ int webrtc_peer_send_raw(esp_peer_handle_t handle, const uint8_t *data, size_t l
     }
     
     esp_peer_data_frame_t frame = {
+        .type = ESP_PEER_DATA_CHANNEL_DATA,  // Binary data, not string!
         .stream_id = 0,
         .data = (uint8_t *)data,
         .size = len

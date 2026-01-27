@@ -30,12 +30,7 @@ import time
 import network
 
 # WBP protocol handler (C module)
-try:
-    import webrepl_rtc
-    _WBP_AVAILABLE = True
-except ImportError:
-    webrepl_rtc = None
-    _WBP_AVAILABLE = False
+import webrepl_binary as webrepl
 
 # Syslog helper (always available - no-op if not configured)
 from lib.sys.syslog_helper import syslog
@@ -100,12 +95,8 @@ def _on_data(data):
         if _peer is None or not _peer.is_connected():
             return
         
-        # Route to WBP handler if available
-        if _WBP_AVAILABLE and webrepl_rtc is not None:
-            webrepl_rtc.on_data(data)
-        else:
-            # Fallback: echo for testing
-            _peer.send(data)
+        # Route to WBP handler
+        webrepl.on_data(data)
             
     except KeyboardInterrupt:
         # Ignore KeyboardInterrupt in system callbacks - it should only affect user tasks
@@ -129,19 +120,15 @@ def _on_state(state_code):
     _state['connected'] = (state_code == webrtc.STATE_DATA_CHANNEL_OPENED)
     
     if state_code == webrtc.STATE_DATA_CHANNEL_OPENED:
-        syslog.info("DataChannel OPENED - attempting to start WBP handler", source="webrtc")
+        syslog.info("DataChannel OPENED - starting WBP handler", source="webrtc")
         _state['last_error'] = None
-        # Start WBP handler with peer reference
-        if not _WBP_AVAILABLE:
-            syslog.warning("WBP not available (_WBP_AVAILABLE=False)", source="webrtc")
-        elif webrepl_rtc is None:
-            syslog.warning("webrepl_rtc module is None", source="webrtc")
-        elif _peer is None:
+        
+        if _peer is None:
             syslog.warning("_peer is None", source="webrtc")
         else:
             try:
-                webrepl_rtc.update_channel_state(True)
-                webrepl_rtc.start(_peer)
+                webrepl.update_channel_state(True)
+                webrepl.start_rtc(_peer)
                 syslog.info("WBP handler started on DataChannel", source="webrtc")
                 
                 # Call auth callback to send welcome banner (same as WebSocket)
@@ -157,9 +144,8 @@ def _on_state(state_code):
                 _state['last_error'] = str(e)
     elif state_code == webrtc.STATE_DATA_CHANNEL_CLOSED:
         # Stop WBP handler
-        if _WBP_AVAILABLE and webrepl_rtc is not None:
-            webrepl_rtc.update_channel_state(False)
-            webrepl_rtc.stop()
+        webrepl.update_channel_state(False)
+        webrepl.stop()
     elif state_code == webrtc.STATE_CONNECT_FAILED:
         _state['last_error'] = 'Connection failed'
         syslog.error("Connection failed", source="webrtc")

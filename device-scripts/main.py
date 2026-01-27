@@ -35,7 +35,6 @@ import webrepl_binary as webrepl
 import json
 import logging
 import asyncio
-import webrepl_rtc
 
 from lib.sys import bg_tasks
 
@@ -134,7 +133,7 @@ def start_servers(ip):
                     tagline = f"MicroPython {uname.version}; {uname.machine}"
                     webrepl.notify(json.dumps({"welcome": {"banner": "", "tagline": tagline}}))
         else:
-            webrepl.start(password=webrepl_password, path="/webrepl")
+            webrepl.start(webrepl_password, "/webrepl")
             _log("info", "WebREPL started")
     except Exception as e:
         _log("error", f"Failed to start WebREPL: {e}")
@@ -181,9 +180,8 @@ async def queue_pump():
     """Process webRTC, WebREPL and HTTP queues - core task that keeps REPL responsive"""
     while True:
         try:
-            webrepl.process_queue()
+            webrepl.process_queue()  # Handles both WebSocket and WebRTC transports
             httpserver.process_queue()
-            webrepl_rtc.process_queue()
         except Exception as e:
             _log("warning", f"queue_pump error: {e}")
         
@@ -248,14 +246,6 @@ def webrepl_auth_callback(client_id=WEBREPL_CLIENT_WEBRTC):
         # Try WebSocket transport (client_id >= 0)
         if client_id >= 0:
             webrepl.notify(payload_json)
-        
-        # Try WebRTC transport (client_id == WEBREPL_CLIENT_WEBRTC)
-        if client_id == WEBREPL_CLIENT_WEBRTC:
-            try:
-                import webrepl_rtc
-                webrepl_rtc.notify(payload_json)
-            except Exception as e:
-                _log("warning", f"   WebRTC notify failed: {e}")
             
     except Exception as e:
         # Don't let callback exceptions break the connection
