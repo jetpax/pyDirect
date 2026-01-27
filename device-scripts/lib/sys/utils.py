@@ -612,7 +612,7 @@ def getNetworksInfo():
             
             # Get hostname from config
             try:
-                config_file = '/config/vpn.json'
+                config_file = '/settings/vpn.json'
                 with open(config_file, 'r') as f:
                     config = json.load(f)
                     vpn_info['hostname'] = config.get('hostname', '')
