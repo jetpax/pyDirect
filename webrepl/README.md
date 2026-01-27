@@ -18,18 +18,71 @@ The WebREPL module enables remote interactive Python shell access to ESP32 devic
 - **Browser Compatible** - Works in any modern browser
 - **NAT Traversal** - WebRTC mode works through firewalls
 
+## Architecture
+
+```mermaid
+graph TD
+    subgraph "Python Layer"
+        A[import webrepl_binary]
+        H[logHandler]
+    end
+
+    subgraph "Common Protocol (wbp_common.c)"
+        C[Message Builders]
+        D[File Transfer]
+        E[Queue/Ring]
+        F[Drain Task]
+    end
+
+    subgraph "Transport Layer"
+        G1[WebSocket Transport]
+        G2[WebRTC Transport]
+    end
+
+    A --> C
+    H --> C
+    C --> |g_wbp_active_transport| G1
+    C --> |g_wbp_active_transport| G2
+```
+
 ## Components
 
-This module consolidates two previously separate implementations:
+Unified architecture with shared protocol implementation:
 
-- **`modwebrepl.c`** - WebSocket transport (originally from httpserver)
-- **`modwebrepl_rtc.c`** - WebRTC transport (originally from webrtc)
+| File | Description |
+|------|-------------|
+| `modwebrepl_binary.c` | Unified module handling both WebSocket and WebRTC transports (~600 lines) |
+| `wbp_common.c` | WebREPL Binary Protocol implementation shared by both transports (~1200 lines) |
+| `wbp_common.h` | Protocol constants, type definitions, transport interface |
+
+### Protocol Functions (wbp_common.c)
+
+| Function Group | Functions |
+|----------------|-----------|
+| **Message Builders** | `wbp_send_result()`, `wbp_send_progress()`, `wbp_send_continuation()`, `wbp_send_completions()`, `wbp_send_log()` |
+| **File Transfer** | `wbp_handle_wrq()`, `wbp_handle_rrq()`, `wbp_handle_data()`, `wbp_handle_ack()`, `wbp_send_file_*()` |
+| **Queue System** | `wbp_queue_init()`, `wbp_queue_message()`, `wbp_process_queue()` |
+| **Ring Buffer** | `wbp_ring_init()`, `wbp_ring_write()`, `wbp_ring_read()`, `wbp_ring_space()` |
+| **Dupterm Stream** | `wbp_stream_read()`, `wbp_stream_write()`, `wbp_stream_ioctl()` |
+| **Drain Task** | `wbp_drain_task()`, `wbp_drain_task_start()`, `wbp_drain_task_stop()` |
+
+### Transport Abstraction
+
+All send functions route through `g_wbp_active_transport->send()`:
+
+```c
+typedef struct {
+    bool (*send)(const uint8_t *data, size_t len, void *ctx);
+    bool (*is_connected)(void *ctx);
+    void *context;
+} wbp_transport_t;
+```
 
 ## Dependencies
 
-- **httpserver** - For WebSocket transport
-- **webrtc** - For WebRTC transport
-- **CBOR** - For binary protocol encoding
+- **httpserver** - For WebSocket transport (wsserver)
+- **webrtc** - For WebRTC transport (DataChannel)
+- **CBOR** - For binary protocol encoding (TinyCBOR)
 
 ## Python API
 
@@ -51,11 +104,17 @@ webrepl_binary.set_password("mypassword")
 ### WebRTC Transport
 
 ```python
-import webrepl_rtc
+import webrepl_binary
 
-# WebRTC transport is automatically available
-# when webrtc module is enabled
-# Access via browser at: https://device-ip/webrepl
+# Start WebRTC transport with peer object from signaling
+webrepl_binary.start_rtc(peer)
+
+# Update channel state when DataChannel opens/closes
+webrepl_binary.update_channel_state(True)  # opened
+webrepl_binary.update_channel_state(False)  # closed
+
+# Process incoming data from DataChannel
+webrepl_binary.on_data(data)
 ```
 
 ## Usage
