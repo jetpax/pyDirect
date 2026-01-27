@@ -222,6 +222,16 @@ static void handle_ws_channel_message(int client_id, uint8_t channel, CborValue 
                 break;
             }
             
+            // Hybrid Dispatch: If script is running on TRM channel, route to stdin
+            if (channel == WBP_CH_TRM && !is_bytecode && g_wbp_executing) {
+                // Script is running (possibly blocked on input()) - feed to stdin
+                ESP_LOGI(TAG, "TRM stdin dispatch: len=%d", (int)code_len);
+                wbp_input_ring_write(code_data, code_len);
+                free(code_data);
+                if (id) free(id);
+                break;
+            }
+            
             // Queue execution for all channels
             wbp_queue_message(WBP_MSG_RAW_EXEC, channel, (const char *)code_data, code_len, 
                              id, is_bytecode);
@@ -233,8 +243,10 @@ static void handle_ws_channel_message(int client_id, uint8_t channel, CborValue 
         
         case WBP_OP_INT: {
             // Keyboard interrupt
-            ESP_LOGI(TAG, "Interrupt requested");
+            ESP_LOGI(TAG, "Interrupt requested on ch=%d", channel);
             mp_sched_keyboard_interrupt();
+            // Notify client the interrupt was processed
+            wbp_send_progress(channel, 1, "KeyboardInterrupt", NULL);
             break;
         }
         
@@ -354,6 +366,13 @@ static void handle_ws_file_message(CborValue *array) {
             uint64_t block_num;
             cbor_value_get_uint64(&opcode_val, &block_num);
             wbp_handle_ack((uint16_t)block_num);
+            break;
+        }
+        
+        case WBP_FILE_ERROR: {
+            // Client sent error, abort any active transfer
+            ESP_LOGW(TAG, "Client sent file error, aborting transfer");
+            wbp_close_transfer();
             break;
         }
         
@@ -501,14 +520,49 @@ static void ws_on_message(int client_id, const uint8_t *data, size_t len, bool i
 
 static bool ws_msg_filter(int client_id, const uint8_t *data, size_t len, bool is_binary) {
     (void)client_id;
-    (void)data;
-    (void)len;
-    (void)is_binary;
     
-    // Pre-queue filter for urgent message handling (e.g., Ctrl+C)
-    // For now, always queue all messages normally
-    // Could be extended to handle interrupt signals before queuing
-    return true;
+    // Pre-queue filter for urgent message handling (e.g., Ctrl+C interrupt)
+    // This runs in HTTP server task context BEFORE the message is queued
+    // Critical for handling interrupts when main task is blocked executing code
+    
+    if (!is_binary || len < 3) {
+        return true;  // Not a WBP message, queue normally
+    }
+    
+    // Quick CBOR parse to check for INT opcode
+    // WBP format: [channel, opcode, ...]
+    // CBOR array header: 0x80-0x9f for arrays with 0-23 items, or 0x98/0x99/0x9a
+    if ((data[0] & 0xf0) != 0x80) {
+        return true;  // Not a CBOR array, queue normally
+    }
+    
+    // Parse channel (should be small int 0-23: 0x00-0x17)
+    // For TRM channel (1): data[1] should be 0x01
+    if (data[1] > 0x17) {
+        return true;  // Channel is not a small int, queue normally
+    }
+    uint8_t channel = data[1];
+    
+    // Parse opcode (should be small int 0-23: 0x00-0x17)
+    // For INT opcode (1): data[2] should be 0x01
+    if (data[2] > 0x17) {
+        return true;  // Opcode is not a small int, queue normally
+    }
+    uint8_t opcode = data[2];
+    
+    // Check for INT opcode on TRM or M2M channel
+    if (opcode == WBP_OP_INT && (channel == WBP_CH_TRM || channel == WBP_CH_M2M)) {
+        // URGENT: Keyboard interrupt - handle immediately!
+        ESP_LOGI(TAG, "Pre-queue: Interrupt detected on ch=%d, scheduling immediately", channel);
+        mp_sched_keyboard_interrupt();
+        
+        // Send progress response (interrupt was processed)
+        // Note: We still want to send the response, so continue to queue
+        // Actually, let the normal handler send the response after queuing
+        return true;  // Still queue to get proper response handling
+    }
+    
+    return true;  // Queue normally
 }
 
 //=============================================================================
