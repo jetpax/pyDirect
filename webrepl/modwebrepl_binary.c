@@ -204,9 +204,27 @@ static void handle_ws_channel_message(int client_id, uint8_t channel, CborValue 
             
             ESP_LOGI(TAG, "EXE: ch=%d code_len=%d id=%s", channel, (int)code_len, id ? id : "(null)");
             
+            // Check for tab completion request (code ends with \t)
+            bool is_bytecode = (format == WBP_FMT_MPY);
+            if (!is_bytecode && code_len > 0 && code_data[code_len - 1] == '\t') {
+                // Tab completion request - collect and send completions
+                ESP_LOGI(TAG, "Tab completion request: '%.*s'", (int)(code_len - 1), code_data);
+                
+                completion_collector_t collector;
+                completion_collector_init(&collector);
+                
+                wbp_collect_completions((const char *)code_data, code_len - 1, &collector);
+                wbp_send_completions(channel, &collector);
+                
+                completion_collector_free(&collector);
+                free(code_data);
+                if (id) free(id);
+                break;
+            }
+            
             // Queue execution for all channels
             wbp_queue_message(WBP_MSG_RAW_EXEC, channel, (const char *)code_data, code_len, 
-                             id, format == WBP_FMT_MPY);
+                             id, is_bytecode);
             
             free(code_data);
             if (id) free(id);

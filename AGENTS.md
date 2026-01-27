@@ -14,6 +14,14 @@ pyDirect provides custom MicroPython modules for:
 - **usbmodem** - USB modem (SIM7600) support
 - **plc** - PLC/V2G protocol (experimental)
 
+## WebREPL Binary Protocol (WBP) Architecture
+
+> **Single Protocol, Multiple Transports** - WBP is one unified protocol with two transport options:
+> - **WebRTC** (primary) - P2P via browser DataChannel
+> - **WebSocket** (fallback) - Direct wss:// connection
+>
+> Both transports share the **same message handler** in `webrepl/modwebrepl_binary.c`. Protocol features (authentication, completion, execution, file transfer) are transport-agnostic. Never duplicate protocol logic per transport.
+
 ## Repository Structure
 
 ```
