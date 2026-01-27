@@ -73,22 +73,15 @@ typedef enum {
 } wbp_transport_type_t;
 
 static wbp_transport_type_t g_active_transport_type = TRANSPORT_NONE;
+static bool g_wbp_authenticated = false;  // Unified auth state for active transport
 
 //=============================================================================
 // WebSocket Transport State
 //=============================================================================
 
-#define MAX_WS_CLIENTS 4
-
-typedef struct {
-    int client_id;
-    bool active;
-    bool authenticated;
-    uint8_t current_channel;
-} ws_client_t;
-
-static ws_client_t g_ws_clients[MAX_WS_CLIENTS] = {0};
-static int g_ws_output_client_id = -1;
+// Single client - only one WebSocket connection at a time (one VM = one client)
+static int g_ws_client_id = -1;           // Active client ID, -1 if none
+static uint8_t g_ws_current_channel = 1;  // Current channel (TRM=1)
 static char *g_ws_password = NULL;
 static char *g_ws_path = NULL;
 static httpd_handle_t g_ws_server = NULL;
@@ -102,6 +95,7 @@ static mp_obj_t g_wbp_auth_callback = MP_OBJ_NULL;  // Python callback for auth 
 static void *g_rtc_peer_handle = NULL;
 static bool g_rtc_data_channel_open = false;
 static bool g_rtc_running = false;
+// Note: Uses g_wbp_authenticated for auth state (unified)
 
 //=============================================================================
 // WebSocket Transport Implementation
@@ -109,14 +103,14 @@ static bool g_rtc_running = false;
 
 static bool ws_send(const uint8_t *data, size_t len, void *ctx) {
     (void)ctx;
-    if (g_ws_output_client_id < 0) return false;
-    return wsserver_send_to_client(g_ws_output_client_id, data, len, true);  // true = binary
+    if (g_ws_client_id < 0) return false;
+    return wsserver_send_to_client(g_ws_client_id, data, len, true);  // true = binary
 }
 
 
 static bool ws_is_connected(void *ctx) {
     (void)ctx;
-    return g_ws_output_client_id >= 0;
+    return g_ws_client_id >= 0;
 }
 
 static wbp_transport_t ws_transport = {
@@ -146,25 +140,7 @@ static wbp_transport_t rtc_transport = {
     .context = NULL
 };
 
-//=============================================================================
-// WebSocket Client Management
-//=============================================================================
-
-static int find_free_ws_client_slot(void) {
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-        if (!g_ws_clients[i].active) return i;
-    }
-    return -1;
-}
-
-static int find_ws_client_by_id(int client_id) {
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-        if (g_ws_clients[i].active && g_ws_clients[i].client_id == client_id) {
-            return i;
-        }
-    }
-    return -1;
-}
+// Note: Single-client model - no client management functions needed
 
 //=============================================================================
 // WebSocket Message Handler
@@ -387,13 +363,8 @@ static void handle_ws_auth_message(int client_id, CborValue *array) {
     
     // Check password
     if (g_ws_password && strcmp(password, g_ws_password) == 0) {
-        int slot = find_ws_client_by_id(client_id);
-        if (slot >= 0) {
-            g_ws_clients[slot].authenticated = true;
-        }
-        
-        // Set as output client
-        g_ws_output_client_id = client_id;
+        // Set unified auth state
+        g_wbp_authenticated = true;
         
         // Switch to WebSocket transport
         g_wbp_active_transport = &ws_transport;
@@ -434,39 +405,25 @@ static void handle_ws_auth_message(int client_id, CborValue *array) {
 static void ws_on_connect(int client_id) {
     ESP_LOGI(TAG, "WebSocket client %d connected", client_id);
     
-    int slot = find_free_ws_client_slot();
-    if (slot >= 0) {
-        g_ws_clients[slot].client_id = client_id;
-        g_ws_clients[slot].active = true;
-        g_ws_clients[slot].authenticated = false;
-        g_ws_clients[slot].current_channel = WBP_CH_TRM;
-    } else {
-        ESP_LOGW(TAG, "No free client slots");
+    // Single-client model: reject if already have a client
+    if (g_ws_client_id >= 0) {
+        ESP_LOGW(TAG, "Rejecting client %d: already have active client %d", client_id, g_ws_client_id);
+        // Note: wsserver should handle rejection, but log for visibility
+        return;
     }
+    
+    g_ws_client_id = client_id;
+    g_ws_current_channel = WBP_CH_TRM;
 }
 
 static void ws_on_disconnect(int client_id) {
     ESP_LOGI(TAG, "WebSocket client %d disconnected", client_id);
     
-    int slot = find_ws_client_by_id(client_id);
-    if (slot >= 0) {
-        g_ws_clients[slot].active = false;
-        g_ws_clients[slot].authenticated = false;
-    }
-    
-    if (g_ws_output_client_id == client_id) {
-        g_ws_output_client_id = -1;
+    if (g_ws_client_id == client_id) {
+        g_ws_client_id = -1;
+        g_wbp_authenticated = false;
         
-        // Check for other authenticated clients
-        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-            if (g_ws_clients[i].active && g_ws_clients[i].authenticated) {
-                g_ws_output_client_id = g_ws_clients[i].client_id;
-                break;
-            }
-        }
-        
-        if (g_ws_output_client_id < 0 && g_active_transport_type == TRANSPORT_WEBSOCKET) {
-            // No more WebSocket clients, clear transport
+        if (g_active_transport_type == TRANSPORT_WEBSOCKET) {
             wbp_dupterm_detach();
             g_wbp_active_transport = NULL;
             g_active_transport_type = TRANSPORT_NONE;
@@ -479,8 +436,11 @@ static void ws_on_message(int client_id, const uint8_t *data, size_t len, bool i
     
     if (!is_binary) return;  // Only handle binary WBP messages
     
-    int slot = find_ws_client_by_id(client_id);
-    if (slot < 0) return;
+    // Reject messages from non-active client
+    if (client_id != g_ws_client_id) {
+        ESP_LOGW(TAG, "Ignoring message from non-active client %d", client_id);
+        return;
+    }
     
     // Parse CBOR
     CborParser parser;
@@ -511,7 +471,7 @@ static void ws_on_message(int client_id, const uint8_t *data, size_t len, bool i
     if (channel == WBP_CH_EVENT) {
         // AUTH message
         handle_ws_auth_message(client_id, &root);
-    } else if (!g_ws_clients[slot].authenticated) {
+    } else if (!g_wbp_authenticated) {
         ESP_LOGW(TAG, "Unauthenticated message from client %d", client_id);
         wbp_send_auth_fail("Not authenticated");
     } else if (channel == WBP_CH_FILE) {
@@ -537,6 +497,43 @@ static bool ws_msg_filter(int client_id, const uint8_t *data, size_t len, bool i
 // WebRTC Message Handler
 //=============================================================================
 
+static void handle_rtc_auth_message(CborValue *array) {
+    // [0, 0, password] - Auth message format
+    CborValue val;
+    cbor_value_enter_container(array, &val);
+    cbor_value_advance(&val);  // Skip channel (0)
+    cbor_value_advance(&val);  // Skip opcode (0)
+    
+    if (!cbor_value_is_text_string(&val)) {
+        wbp_send_auth_fail("Invalid password format");
+        return;
+    }
+    
+    char *password = NULL;
+    size_t password_len;
+    cbor_value_dup_text_string(&val, &password, &password_len, NULL);
+    
+    // Check password (using same password as WebSocket)
+    if (g_ws_password && strcmp(password, g_ws_password) == 0) {
+        // Set unified auth state
+        g_wbp_authenticated = true;
+        
+        // Attach dupterm now that we're authenticated
+        wbp_dupterm_attach();
+        
+        wbp_send_auth_ok();
+        ESP_LOGI(TAG, "WebRTC authenticated");
+        
+        // Call Python auth callback if registered (deferred to avoid stack issues)
+        // The LED state callback runs in Python layer, not here
+    } else {
+        wbp_send_auth_fail("Invalid password");
+        ESP_LOGW(TAG, "WebRTC auth failed");
+    }
+    
+    free(password);
+}
+
 static void handle_rtc_message(const uint8_t *data, size_t len) {
     // Parse CBOR
     CborParser parser;
@@ -551,19 +548,40 @@ static void handle_rtc_message(const uint8_t *data, size_t len) {
         return;
     }
     
-    // Get channel number
-    CborValue channel_val;
-    cbor_value_enter_container(&root, &channel_val);
+    // Get channel and opcode
+    CborValue val;
+    cbor_value_enter_container(&root, &val);
     
-    if (!cbor_value_is_unsigned_integer(&channel_val)) {
+    if (!cbor_value_is_unsigned_integer(&val)) {
         ESP_LOGE(TAG, "Invalid channel type");
         return;
     }
     
     uint64_t channel;
-    cbor_value_get_uint64(&channel_val, &channel);
+    cbor_value_get_uint64(&val, &channel);
     
-    // WebRTC doesn't need auth (handled at signaling level)
+    // Handle auth message first (channel 0, opcode 0)
+    if (channel == WBP_CH_EVENT) {
+        cbor_value_advance(&val);
+        uint64_t opcode = 0;
+        if (cbor_value_is_unsigned_integer(&val)) {
+            cbor_value_get_uint64(&val, &opcode);
+        }
+        
+        if (opcode == WBP_EVT_AUTH) {
+            handle_rtc_auth_message(&root);
+            return;
+        }
+    }
+    
+    // Reject all other messages if not authenticated
+    if (!g_wbp_authenticated) {
+        ESP_LOGW(TAG, "Unauthenticated WebRTC message");
+        wbp_send_auth_fail("Not authenticated");
+        return;
+    }
+    
+    // Authenticated - process message normally
     if (channel == WBP_CH_FILE) {
         handle_ws_file_message(&root);  // Same handler works
     } else if (channel == WBP_CH_EVENT) {
@@ -673,14 +691,14 @@ STATIC mp_obj_t webrepl_start_rtc(mp_obj_t peer_obj) {
     // Note: Data arrives via on_data() Python callback - no C-level callback registration
     // The Python layer calls webrepl_binary.on_data(bytes) when data arrives
     
-    // Switch to WebRTC transport and attach dupterm
+    // Switch to WebRTC transport (dupterm attach is deferred until after auth)
     // (MUST be after ring buffer and drain task are initialized)
     g_wbp_active_transport = &rtc_transport;
     g_active_transport_type = TRANSPORT_WEBRTC;
-    wbp_dupterm_attach();
+    g_wbp_authenticated = false;  // Reset unified auth state - client must authenticate
     
     g_rtc_running = true;
-    ESP_LOGI(TAG, "WebRTC transport started");
+    ESP_LOGI(TAG, "WebRTC transport started (awaiting auth)");
     
     return mp_const_none;
 }
@@ -701,6 +719,7 @@ STATIC mp_obj_t webrepl_update_channel_state(mp_obj_t open_obj) {
             wbp_dupterm_detach();
             g_wbp_active_transport = NULL;
             g_active_transport_type = TRANSPORT_NONE;
+            g_wbp_authenticated = false;  // Reset unified auth state for next connection
         }
         ESP_LOGI(TAG, "WebRTC DataChannel closed");
     }
@@ -741,13 +760,11 @@ STATIC mp_obj_t webrepl_stop(void) {
     // Clear transport
     g_wbp_active_transport = NULL;
     g_active_transport_type = TRANSPORT_NONE;
+    g_wbp_authenticated = false;  // Reset unified auth state
     
     // WebSocket cleanup
     if (g_ws_running) {
-        g_ws_output_client_id = -1;
-        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-            g_ws_clients[i].active = false;
-        }
+        g_ws_client_id = -1;
         g_ws_running = false;
     }
     

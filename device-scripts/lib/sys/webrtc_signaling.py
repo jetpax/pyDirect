@@ -131,14 +131,8 @@ def _on_state(state_code):
                 webrepl.start_rtc(_peer)
                 syslog.info("WBP handler started on DataChannel", source="webrtc")
                 
-                # Call auth callback to send welcome banner (same as WebSocket)
-                # Use special client_id=-2 to indicate WebRTC transport
-                try:
-                    import main
-                    if hasattr(main, 'webrepl_auth_callback'):
-                        main.webrepl_auth_callback(client_id=main.WEBREPL_CLIENT_WEBRTC)
-                except Exception as e:
-                    syslog.warning(f"Could not call auth callback: {e}", source="webrtc")
+                # Note: No auth callback for WebRTC - already secured by HTTPS signaling + DTLS
+                # LED state can be handled by client if needed (banner() or explicit call)
             except Exception as e:
                 syslog.error(f"Failed to start WBP handler: {e}", source="webrtc")
                 _state['last_error'] = str(e)

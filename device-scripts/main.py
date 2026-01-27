@@ -2,28 +2,35 @@
 pyDirect Orchestrator (main.py)
 ==================================================
 
-This is the main orchestrator script for the pyDirect device.
-Auto-runs on boot to initialize HTTPS/WSS server, WebREPL, and async background tasks.
+Main orchestrator script for the pyDirect device.
+Auto-runs on boot to initialize servers and async background tasks.
 
-This script:
-1. Starts async network tasks in parallel:
-2. Waits for ANY network interface to obtain an IP address
-3. Starts HTTP server on port 80
-4. Starts WebREPL with queue-based execution
-5. Registers WebSocket connect/disconnect callbacks via wsserver
-6. Starts async background tasks via bg_tasks module:
-   - queue_pump: Processes WebREPL/HTTP queues (10ms interval)
-7. Provides detailed status and connection info
-8. Provides helper utilities for client (imported from lib.sys.utils())
-    - getSysInfo()            - Get comprehensive system info (SYS-INFO command)
-    - getNetworksInfo()       - Get all network interfaces info (NETWORKS-INFO command)
-    - neofetch()              - Display neofetch-style system banner with ANSI art
+Architecture:
+    - Protocol: WebREPL Binary Protocol (WBP) - unified message format & authentication
+    - Transports:
+        - WebRTC DataChannel: Primary - works on all platforms
+        - WebSocket (WSS): Fallback transport
+    
+    Both transports use WBP for message framing, authentication, and queue processing
+    through the unified webrepl_binary module.
 
-Extension Functions:
-    Extensions can provide their own helper modules in lib/ext which are imported lazily
-    (on first use) to avoid caching issues when dependencies are uploaded after boot.
-    WebREPL clients can call these functions directly - Python will import them
-    automatically via exec().
+Boot Sequence:
+1. Start network tasks and wait for IP address (WiFi, Ethernet, or WWAN)
+2. Start HTTP/HTTPS server
+3. Start WebREPL (WBP over WebSocket transport)
+4. Start WebRTC signaling server (WBP over WebRTC transport)
+5. Register connection callbacks for LED state management
+6. Start async background tasks:
+   - queue_pump: Processes WBP queues for both transports (10ms interval)
+
+Helper Utilities (imported from lib.sys.utils):
+    - getSysInfo()        - Comprehensive system info
+    - getNetworksInfo()   - All network interfaces info
+    - getStatusInfo()     - Status bar info (memory, temp, uptime, RSSI)
+    - neofetch()          - Neofetch-style system banner with ANSI art
+
+    Note: Small M2M scripts (< 10KB) are client-side inline scripts
+    per the M2M sizing principle - not stored on device flash.
 
 Copyright (c) 2026 Jonathan Peace
 SPDX-License-Identifier: MIT
@@ -223,7 +230,7 @@ WEBREPL_CLIENT_WEBRTC = -2    # Special sentinel for WebRTC connections
 def webrepl_auth_callback(client_id=WEBREPL_CLIENT_WEBRTC):
     """
     Callback when a client successfully connects (WebSocket auth or WebRTC connection).
-    This fires AFTER authentication/connection, so we can safely send welcome message and set LED.
+    Just handles LED state - welcome banner is fetched by client via inline M2M script.
     
     Args:
         client_id: WebSocket client ID (0-3) or WEBREPL_CLIENT_WEBRTC (-2) for WebRTC
@@ -234,25 +241,13 @@ def webrepl_auth_callback(client_id=WEBREPL_CLIENT_WEBRTC):
         if status_led:
             status_led.set_state(StatusLED.STATE_CLIENT_CONNECTED)
         _webrepl_client_connected = True
-        
-        # Send welcome notification with MicroPython version tagline
-        import os
-        import json
-        uname = os.uname()
-        tagline = f"MicroPython {uname.version}; {uname.machine}"
-        payload_dict = {"welcome": {"banner": "ScriptO Studio", "tagline": tagline}}
-        payload_json = json.dumps(payload_dict)
-        
-        # Try WebSocket transport (client_id >= 0)
-        if client_id >= 0:
-            webrepl.notify(payload_json)
             
     except Exception as e:
         # Don't let callback exceptions break the connection
         _log("error", f"   Error in auth callback: {e}")
         import sys
         sys.print_exception(e)
- 
+
 
 def wsserver_disconnect_callback(client_id, event_name):
     """
