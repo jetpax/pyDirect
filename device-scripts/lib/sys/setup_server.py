@@ -149,7 +149,7 @@ def run_setup_server():
             
             # Build redirect URL to Scripto Studio with device hostname
             # TODO: Make studio URL configurable
-            redirect = f"https://localhost:5173/?device={hostname}.local"
+            redirect = f"https://scriptostudio.com/app/?device={hostname}.local"
             
             # Signal main loop to perform reset
             setup_complete[0] = True
