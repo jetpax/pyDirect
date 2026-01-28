@@ -3,13 +3,14 @@ WebREPL Logging Helper
 Provides easy setup for sending logs to ScriptO Studio's Log Sidebar.
 
 Usage:
-    from lib.sys.webrepl_logging import setup_logging
-    
-    logger = setup_logging("my_script", logging.DEBUG)
-    logger.info("Hello from my script!")
-    logger.debug("Debug info")
-    logger.warning("Something seems off")
-    logger.error("Something went wrong!")
+
+from webrepl_logging import log
+
+log.info("Hello from my script!")
+log.debug("Debug info")
+log.warning("Something seems off")
+log.error("Something went wrong!")
+
 """
 import logging
 
@@ -60,3 +61,7 @@ def setup_logging(name=None, level=logging.INFO):
 def get_handler():
     """Get the active WebREPL log handler, or None."""
     return _handler
+
+# Pre-configured global logger for easy import
+# Usage from any script: from webrepl_logging import log
+log = setup_logging("app", logging.DEBUG)
