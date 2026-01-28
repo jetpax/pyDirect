@@ -345,3 +345,28 @@ jobs:
             git push origin gh-pages
           fi
 
+      # Also deploy to master for easy local access via git pull
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          path: master-repo
+      
+      - name: Copy firmware to master docs/
+        run: |
+          mkdir -p master-repo/docs/firmware
+          find release-artifacts -name "*-merged.bin" -exec cp {} master-repo/docs/firmware/ \;
+          ls -lh master-repo/docs/firmware/
+      
+      - name: Commit and push firmware to master
+        run: |
+          cd master-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/firmware/
+          if git diff --staged --quiet; then
+            echo "No firmware changes to commit"
+          else
+            git commit -m "Deploy firmware ${{ needs.check-version.outputs.mpy_version }} to docs/"
+            git push origin master
+          fi
