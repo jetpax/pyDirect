@@ -5,466 +5,1086 @@
   <title>pyDirect Firmware Installer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Flash pyDirect MicroPython firmware to your ESP32 board with one click" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
   <style>
     :root {
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --bg: #0f172a;
-      --surface: #1e293b;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --success: #10b981;
+      /* Professional understated palette */
+      --primary: #5B8DEF;
+      --primary-hover: #4A7DE0;
+      --primary-glow: rgba(91, 141, 239, 0.15);
+      --accent: #7C8DB5;
+      --success: #4CAF7C;
+      --warning: #E0A458;
+      --error: #D66B6B;
+      
+      /* Backgrounds */
+      --bg: #0D1117;
+      --bg-gradient: linear-gradient(135deg, #0D1117 0%, #161B22 100%);
+      --surface: #161B22;
+      --surface-hover: #1C2128;
+      --surface-elevated: #21262D;
+      --glass: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      
+      /* Text */
+      --text: #E6EDF3;
+      --text-secondary: #8B949E;
+      --text-muted: #6E7681;
     }
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-gradient);
       color: var(--text);
       min-height: 100vh;
+      padding: 1.5rem;
+    }
+    
+    .app-container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
       display: flex;
       align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-    
-    .container {
-      max-width: 600px;
-      width: 100%;
-    }
-    
-    .logo {
-      font-size: 4rem;
-      margin-bottom: 1rem;
-      text-align: center;
-    }
-    
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 0.5rem;
-      background: linear-gradient(135deg, #6366f1, #a855f7);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      text-align: center;
-    }
-    
-    .tagline {
-      color: var(--text-muted);
+      gap: 0.75rem;
       margin-bottom: 2rem;
-      text-align: center;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--glass-border);
     }
-
-    /* Device info card */
-    .device-info {
-      background: var(--surface);
-      border-radius: 0.75rem;
-      padding: 1.5rem;
-      margin-bottom: 2rem;
-      display: none; /* Hidden until device detected */
+    
+    .header-icon {
+      font-size: 1.5rem;
     }
-
-    .device-info.visible {
-      display: block;
-    }
-
-    .device-info h2 {
+    
+    .header h1 {
       font-size: 1.25rem;
-      margin-bottom: 1rem;
-      color: var(--success);
+      font-weight: 600;
+      color: var(--text);
     }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1rem;
-    }
-
-    .info-item {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .info-label {
+    
+    .header-version {
+      margin-left: auto;
       font-size: 0.75rem;
       color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      background: var(--surface);
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
     }
 
-    .info-value {
-      font-size: 1rem;
-      color: var(--text);
+    /* Views */
+    .view { display: none; }
+    .view.active { display: block; animation: fadeIn 0.2s ease; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Welcome Section */
+    .welcome {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    
+    .welcome h2 {
+      font-size: 1.5rem;
       font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    .welcome p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
     }
 
-    /* Firmware selection */
-    .firmware-info {
-      background: rgba(99, 102, 241, 0.1);
-      border: 1px solid rgba(99, 102, 241, 0.3);
-      border-radius: 0.5rem;
-      padding: 1rem;
-      margin-bottom: 2rem;
-      display: none;
+    /* Scenario Cards */
+    .scenario-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
     }
-
-    .firmware-info.visible {
-      display: block;
+    
+    .scenario-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
     }
-
-    .firmware-info strong {
+    
+    .scenario-card:hover {
+      background: var(--surface-hover);
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+    
+    .scenario-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
       color: var(--primary);
     }
     
-    .chip-support {
-      background: var(--surface);
-      border-radius: 0.75rem;
-      padding: 1rem;
-      margin-bottom: 2rem;
+    .scenario-icon i {
+      font-size: 1.75rem;
     }
     
-    .chip-support h3 {
-      color: var(--text-muted);
+    .scenario-card h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+    }
+    
+    .scenario-card p {
       font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Hint Box */
+    .hint-box {
+      background: var(--surface);
+      border-radius: 0.5rem;
+      padding: 0.875rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      margin-bottom: 1rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    /* Terminal */
+    .terminal-wrapper {
+      border: 1px solid var(--glass-border);
+      border-radius: 0.5rem;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    
+    .terminal-header {
+      background: var(--surface);
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .terminal-header span {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .terminal-toggle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+    
+    .terminal-wrapper.collapsed .terminal-toggle {
+      transform: rotate(-90deg);
+    }
+    
+    .terminal-content {
+      background: #0A0D10;
+      padding: 0.75rem;
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 0.8rem;
+      color: #7EE787;
+      transition: max-height 0.2s ease;
+    }
+    
+    .terminal-wrapper.collapsed .terminal-content {
+      max-height: 0;
+      padding: 0 0.75rem;
+    }
+
+    /* Buttons */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 0.875rem 1.5rem;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 0.5rem;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+    
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--glass-border);
+    }
+    
+    .btn-secondary:hover {
+      background: var(--surface-hover);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-back {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    
+    .btn-back:hover {
+      color: var(--text);
+    }
+
+    /* Device Info Card */
+    .device-card {
+      background: var(--surface);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    
+    .device-info-compact {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface-elevated);
+      border-radius: 0.5rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.85rem;
+    }
+    
+    .device-info-compact i {
+      color: var(--primary);
+    }
+    
+    .device-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    
+    .device-card h3 {
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .status-badge {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 1rem;
+      background: var(--success);
+      color: white;
+    }
+    
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.875rem;
+    }
+    
+    .info-item label {
+      display: block;
+      font-size: 0.65rem;
+      color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.2rem;
+    }
+    
+    .info-item span {
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    /* Credential Display */
+    .credential-box {
+      background: var(--surface-elevated);
+      border-radius: 0.5rem;
+      padding: 1rem;
       margin-bottom: 0.75rem;
     }
     
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      justify-content: center;
+    .credential-box label {
+      display: block;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
     }
     
-    .chip {
-      background: rgba(99, 102, 241, 0.2);
-      color: #a5b4fc;
-      padding: 0.5rem 1rem;
+    .credential-box .value-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    
+    .credential-box .value {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 1rem;
+      color: var(--primary);
+      word-break: break-all;
+    }
+    
+    .btn-copy {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: 0.25rem;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    
+    .btn-copy:hover {
+      color: var(--primary);
+      background: var(--glass);
+    }
+    
+    .btn-copy i {
+      font-size: 1.1rem;
+    }
+
+    /* Product Select */
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.35rem;
+    }
+    
+    .form-group select {
+      width: 100%;
+      padding: 0.75rem;
       border-radius: 0.5rem;
-      font-size: 0.875rem;
+      border: 1px solid var(--glass-border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    
+    .modal-overlay.active {
+      display: flex;
+    }
+    
+    .modal {
+      background: var(--surface);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      max-width: 400px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    
+    .modal h3 {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+
+    /* WiFi List */
+    .wifi-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      background: var(--surface-elevated);
+      border: 1px solid transparent;
+      border-radius: 0.5rem;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .wifi-item:hover {
+      border-color: var(--primary);
+    }
+    
+    .wifi-name {
       font-weight: 500;
     }
     
-    esp-web-install-button {
-      display: block;
-      margin: 2rem 0;
-    }
-    
-    esp-web-install-button button {
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 1rem 2rem;
-      border-radius: 0.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      width: 100%;
-    }
-    
-    esp-web-install-button button:hover {
-      background: var(--primary-hover);
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
-    }
-    
-    .requirements {
-      text-align: center;
+    .wifi-signal {
+      font-family: monospace;
       color: var(--text-muted);
-      font-size: 0.875rem;
+      font-size: 0.85rem;
     }
-    
-    .requirements a {
-      color: #a5b4fc;
-    }
-    
+
+    /* Footer */
     .footer {
-      margin-top: 3rem;
+      text-align: center;
       color: var(--text-muted);
       font-size: 0.75rem;
-      text-align: center;
+      margin-top: 1.5rem;
     }
     
     .footer a {
-      color: #a5b4fc;
+      color: var(--text-secondary);
       text-decoration: none;
+    }
+    
+    .footer a:hover {
+      color: var(--primary);
+    }
+
+    /* Progress Steps */
+    .progress-steps {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .progress-step {
+      width: 2rem;
+      height: 3px;
+      background: var(--glass-border);
+      border-radius: 2px;
+      transition: background 0.2s;
+    }
+    
+    .progress-step.active {
+      background: var(--primary);
+    }
+    
+    .progress-step.complete {
+      background: var(--success);
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="logo">⚡</div>
-    <h1>pyDirect Firmware Installer</h1>
-    <p class="tagline">Flash MicroPython + pyDirect modules to your ESP32 in one click</p>
-    
-    <!-- Device info (shown after detection) -->
-    <div id="deviceInfo" class="device-info">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <h2 style="margin: 0;">✓ Device Detected</h2>
-        <span id="connStatus" style="
-          background: var(--success);
-          color: white;
-          padding: 0.25rem 0.75rem;
-          border-radius: 1rem;
-          font-size: 0.75rem;
-          font-weight: 600;
-        ">● Connected</span>
+  <div class="app-container">
+    <!-- Header -->
+    <div class="header">
+      <span class="header-icon"><i class="ti ti-bolt"></i></span>
+      <h1>pyDirect Setup</h1>
+      <span class="header-version">v2.0</span>
+    </div>
+
+    <!-- View: Landing / Scenario Selection -->
+    <div id="viewLanding" class="view active">
+      <div class="welcome">
+        <h2>Welcome to pyDirect</h2>
+        <p>Connect your device to get started</p>
       </div>
-      <div class="info-grid">
-        <div class="info-item">
-          <span class="info-label">Chip</span>
-          <span class="info-value" id="chipName">-</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Flash Size</span>
-          <span class="info-value" id="flashSize">-</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">PSRAM</span>
-          <span class="info-value" id="psramSize">-</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">MAC Address</span>
-          <span class="info-value" id="macAddress">-</span>
+
+      <!-- Step 1: Connect -->
+      <div id="landingConnect">
+        <button class="btn btn-primary" onclick="connectAndDetect()" id="landingConnectBtn">
+          <i class="ti ti-usb"></i> Connect Device
+        </button>
+        
+        <div class="hint-box" style="margin-top: 1.5rem;">
+          <i class="ti ti-bulb"></i>
+          <span>Plug in your ESP32 via USB and click Connect.</span>
         </div>
       </div>
-    </div>
 
-    <!-- Firmware selection info -->
-    <div id="firmwareInfo" class="firmware-info">
-      <strong>Selected firmware:</strong> <span id="selectedFirmware">-</span>
-    </div>
-
-    <!-- Product Selection (shown after detection) -->
-    <div id="productSelect" style="
-      display: none;
-      background: var(--surface);
-      border-radius: 0.75rem;
-      padding: 1rem;
-      margin-bottom: 1rem;
-    ">
-      <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">
-        Select your board/product:
-      </label>
-      <select id="productDropdown" style="
-        width: 100%;
-        padding: 0.75rem;
-        border-radius: 0.5rem;
-        border: 1px solid rgba(99, 102, 241, 0.3);
-        background: var(--bg);
-        color: var(--text);
-        font-size: 1rem;
-        cursor: pointer;
-      ">
-        <!-- Options populated dynamically based on detected chip -->
-      </select>
-    </div>
-
-    <div class="chip-support">
-      <h3>Supported Chips</h3>
-      <div class="chips">
-        <span class="chip">ESP32-S3</span>
-        <span class="chip">ESP32-P4</span>
-      </div>
-    </div>
-    
-    <!-- Custom Connect button for detection -->
-    <button id="connectBtn" style="
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 1rem 2rem;
-      border-radius: 0.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      margin-bottom: 1rem;
-      transition: all 0.2s;
-    " onmouseover="this.style.background='var(--primary-hover)'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 25px rgba(99, 102, 241, 0.3)'" onmouseout="this.style.background='var(--primary)'; this.style.transform=''; this.style.boxShadow=''">
-      Connect & Install pyDirect
-    </button>
-
-    <!-- Flash button, hidden until after detection -->
-    <button id="flashBtn" style="
-      background: var(--success);
-      color: white;
-      border: none;
-      padding: 1rem 2rem;
-      border-radius: 0.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      margin-bottom: 1rem;
-      transition: all 0.2s;
-      display: none;
-    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 25px rgba(16, 185, 129, 0.3)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-      Flash Firmware Now
-    </button>
-
-    <!-- Debug: Skip to REPL WiFi Setup -->
-    <button id="wifiSetupBtn" style="
-      background: #8b5cf6;
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 0.5rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      margin-bottom: 1rem;
-      transition: all 0.2s;
-      display: none;
-    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 25px rgba(139, 92, 246, 0.3)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
-      WiFi Setup via REPL
-    </button>
-
-    <!-- Debug Log Window -->
-    <div id="debugLog" style="
-      display: none;
-      background: #1e1e1e;
-      border: 1px solid #333;
-      border-radius: 0.5rem;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      max-height: 300px;
-      overflow-y: auto;
-      font-family: 'Courier New', monospace;
-      font-size: 0.85rem;
-      color: #00ff00;
-    "></div>
-    
-    <!-- WiFi Network Selection Modal -->
-    <div id="wifiModal" style="
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    ">
-      <div style="
-        background: var(--card-bg);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        max-width: 400px;
-        width: 90%;
-        max-height: 80vh;
-        overflow-y: auto;
-      ">
-        <h3 style="margin: 0 0 1rem 0; color: white;">📡 Select WiFi Network</h3>
-        <div id="wifiNetworkList"></div>
-        <button id="wifiCancelBtn" style="
-          width: 100%;
-          margin-top: 1rem;
-          padding: 0.75rem;
-          background: #374151;
-          color: white;
-          border: none;
-          border-radius: 0.5rem;
-          cursor: pointer;
-        ">Cancel</button>
-      </div>
-    </div>
-    
-    <!-- Flash Complete Modal -->
-    <div id="flashCompleteModal" style="
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.85);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    ">
-      <div style="
-        background: var(--surface);
-        border-radius: 1rem;
-        padding: 2rem;
-        max-width: 400px;
-        width: 90%;
-        text-align: center;
-      ">
-        <div style="
-          width: 48px;
-          height: 48px;
-          background: var(--success);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 1rem;
-        ">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
+      <!-- Step 2: Show scenarios after connected -->
+      <div id="landingScenarios" style="display: none;">
+        <div class="device-info-compact" id="connectedDeviceInfo">
+          <i class="ti ti-cpu"></i>
+          <span id="connectedChipName">-</span>
+          <span class="status-badge" id="deviceStatus">Connected</span>
         </div>
-        <h2 style="color: white; margin: 0 0 0.5rem 0; font-size: 1.25rem;">Flash Complete</h2>
-        <p style="color: #94a3b8; margin: 0 0 1.5rem 0; font-size: 0.9rem;">
-          pyDirect firmware installed successfully.<br>
-          Ready for WiFi configuration.
+        
+        <div class="scenario-grid">
+          <div class="scenario-card" id="scenarioNew" onclick="selectScenario('new')">
+            <div class="scenario-icon"><i class="ti ti-cpu"></i></div>
+            <h3>New Device</h3>
+            <p>Flash fresh firmware onto a blank ESP32</p>
+          </div>
+          <div class="scenario-card" id="scenarioForgot" onclick="selectScenario('forgot')">
+            <div class="scenario-icon"><i class="ti ti-key"></i></div>
+            <h3>Forgot Credentials</h3>
+            <p>View saved hostname and password</p>
+          </div>
+          <div class="scenario-card" id="scenarioWifi" onclick="selectScenario('wifi')">
+            <div class="scenario-icon"><i class="ti ti-wifi"></i></div>
+            <h3>Change WiFi</h3>
+            <p>Update network settings on existing device</p>
+          </div>
+          <div class="scenario-card" id="scenarioRebless" onclick="selectScenario('rebless')">
+            <div class="scenario-icon"><i class="ti ti-refresh"></i></div>
+            <h3>Re-provision</h3>
+            <p>Fresh start with new certificates</p>
+          </div>
+        </div>
+        
+        <button class="btn btn-secondary" onclick="disconnectDevice()" style="margin-top: 1rem;">
+          <i class="ti ti-unlink"></i> Disconnect
+        </button>
+      </div>
+    </div>
+
+    <!-- View: New Device Flow -->
+    <div id="viewNewDevice" class="view">
+      <button class="btn-back" onclick="goHome()">← Back</button>
+      
+      <div class="progress-steps">
+        <div class="progress-step" id="step1"></div>
+        <div class="progress-step" id="step2"></div>
+        <div class="progress-step" id="step3"></div>
+        <div class="progress-step" id="step4"></div>
+      </div>
+
+      <!-- Step 1: Connect -->
+      <div id="newStep1">
+        <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Step 1: Connect Device</h2>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+          Connect your ESP32 via USB. You'll be prompted to select the serial port.
         </p>
-        <button id="proceedWifiSetupBtn" style="
-          width: 100%;
-          padding: 0.875rem 1.5rem;
-          background: var(--primary);
-          color: white;
-          font-size: 1rem;
-          font-weight: 600;
-          border: none;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          margin-bottom: 0.5rem;
-          transition: all 0.2s;
-        " onmouseover="this.style.background='var(--primary-hover)'" onmouseout="this.style.background='var(--primary)'">
-          Configure WiFi
+        <button id="connectBtn" class="btn btn-primary" onclick="connectDevice()">
+          Connect to ESP32
         </button>
-        <button id="skipWifiSetupBtn" style="
-          width: 100%;
-          padding: 0.625rem 1.5rem;
-          background: transparent;
-          color: #94a3b8;
-          font-size: 0.875rem;
-          border: 1px solid #374151;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          transition: all 0.2s;
-        " onmouseover="this.style.borderColor='#6b7280'; this.style.color='#d1d5db'" onmouseout="this.style.borderColor='#374151'; this.style.color='#94a3b8'">
-          Skip for now
+      </div>
+
+      <!-- Step 2: Device Detected + Flash -->
+      <div id="newStep2" style="display: none;">
+        <div class="device-card" id="deviceInfo">
+          <div class="device-card-header">
+            <h3>✓ Device Detected</h3>
+            <span class="status-badge">● Connected</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Chip</label>
+              <span id="chipName">-</span>
+            </div>
+            <div class="info-item">
+              <label>Flash</label>
+              <span id="flashSize">-</span>
+            </div>
+            <div class="info-item">
+              <label>PSRAM</label>
+              <span id="psramSize">-</span>
+            </div>
+            <div class="info-item">
+              <label>MAC</label>
+              <span id="macAddress">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" id="productSelect" style="display: none;">
+          <label>Select firmware:</label>
+          <select id="productDropdown"></select>
+        </div>
+        
+        <div id="firmwareInfo" style="background: var(--surface-elevated); padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; display: none;">
+          <span style="color: var(--text-muted); font-size: 0.8rem;">Selected: </span>
+          <span id="selectedFirmware" style="color: var(--primary); font-size: 0.85rem;">-</span>
+        </div>
+
+        <button id="flashBtn" class="btn btn-success" onclick="flashFirmware()">
+          Flash Firmware
+        </button>
+      </div>
+
+      <!-- Step 3: WiFi Setup -->
+      <div id="newStep3" style="display: none;">
+        <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Step 3: Configure WiFi</h2>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+          Connecting to device and scanning for networks...
+        </p>
+        <button id="wifiSetupBtn" class="btn btn-primary" disabled>
+          Scanning...
+        </button>
+      </div>
+
+      <!-- Step 4: Complete -->
+      <div id="newStep4" style="display: none;">
+        <div style="text-align: center; padding: 2rem 0;">
+          <div style="width: 48px; height: 48px; background: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <h2 style="font-size: 1.25rem; margin-bottom: 0.5rem;">Setup Complete!</h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+            Your device is ready. Hostname: <strong id="finalHostname">-</strong>
+          </p>
+        </div>
+        
+        <!-- Browser Security Warning Guidance -->
+        <div class="hint-box" style="text-align: left; margin-bottom: 1rem;">
+          <i class="ti ti-alert-triangle" style="color: var(--warning);"></i>
+          <div style="flex: 1;">
+            <strong style="display: block; margin-bottom: 0.25rem;">Next: Accept Browser Security Warning</strong>
+            <span style="font-size: 0.8rem;">
+              When you visit your device, your browser will show a security warning. 
+              This is expected — click <strong>"Advanced"</strong> then <strong>"Proceed"</strong> 
+              to trust your device's self-signed certificate. You only need to do this once.
+            </span>
+          </div>
+        </div>
+        
+        <a id="deviceLink" href="#" target="_blank" class="btn btn-primary" style="text-decoration: none;">
+          <i class="ti ti-external-link"></i> Open Device Setup
+        </a>
+        <button class="btn btn-secondary" onclick="goHome()" style="margin-top: 0.5rem;">
+          Done
         </button>
       </div>
     </div>
-    
-    <p class="requirements">
-      Requires Chrome, Edge, or Opera on desktop.<br>
-      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API#browser_compatibility" target="_blank">Browser compatibility</a>
-    </p>
-    
+
+    <!-- View: Forgot Credentials -->
+    <div id="viewForgot" class="view">
+      <button class="btn-back" onclick="goBackToScenarios()">← Back</button>
+      
+      <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Recover Credentials</h2>
+      <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+        Reading device settings...
+      </p>
+
+      <div id="forgotCredentials" style="display: none;">
+        <div class="credential-box">
+          <label>Hostname</label>
+          <div class="value-row">
+            <div class="value" id="recoveredHostname">-</div>
+            <button class="btn-copy" onclick="copyToClipboard('recoveredHostname')" title="Copy">
+              <i class="ti ti-copy"></i>
+            </button>
+          </div>
+        </div>
+        <div class="credential-box">
+          <label>Password</label>
+          <div class="value-row">
+            <div class="value" id="recoveredPassword">-</div>
+            <button class="btn-copy" onclick="copyToClipboard('recoveredPassword')" title="Copy">
+              <i class="ti ti-copy"></i>
+            </button>
+          </div>
+        </div>
+        <div class="credential-box">
+          <label>WiFi Network</label>
+          <div class="value-row">
+            <div class="value" id="recoveredSSID">-</div>
+            <button class="btn-copy" onclick="copyToClipboard('recoveredSSID')" title="Copy">
+              <i class="ti ti-copy"></i>
+            </button>
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="goHome()" style="margin-top: 1rem;">
+          Done
+        </button>
+      </div>
+    </div>
+
+    <!-- View: Change WiFi -->
+    <div id="viewWifi" class="view">
+      <button class="btn-back" onclick="goBackToScenarios()">← Back</button>
+      
+      <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Change WiFi Network</h2>
+      <p id="wifiChangeStatus" style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+        Connecting to device to scan for networks...
+      </p>
+      <!-- Status shown in terminal log below -->
+    </div>
+
+    <!-- View: Re-provision -->
+    <div id="viewRebless" class="view">
+      <button class="btn-back" onclick="goBackToScenarios()">← Back</button>
+      
+      <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem;">Re-provision Device</h2>
+      <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+        Generating new certificates and password. WiFi settings will be preserved.
+      </p>
+
+      <!-- Process starts automatically -->
+      <div id="reblessStatus" style="color: var(--primary);">Connecting...</div>
+    </div>
+
+    <!-- Terminal (Collapsible) -->
+    <div class="terminal-wrapper" id="terminalWrapper">
+      <div class="terminal-header" onclick="toggleTerminal()">
+        <span><i class="ti ti-terminal-2"></i> Status Log</span>
+        <span class="terminal-toggle"><i class="ti ti-chevron-down"></i></span>
+      </div>
+      <div class="terminal-content" id="debugLog">
+        <div>> Ready</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
     <div class="footer">
       <p>
-        <a href="https://github.com/jetpax/pyDirect" target="_blank">GitHub</a> •
-        <a href="https://github.com/jetpax/pyDirect/blob/master/README.md" target="_blank">Documentation</a>
+        Requires Chrome, Edge, or Opera •
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API#browser_compatibility" target="_blank">Browser compatibility</a>
       </p>
+      <p style="margin-top: 0.5rem;">
+        <a href="https://github.com/jetpax/pyDirect" target="_blank">GitHub</a> •
+        <a href="https://scriptostudio.com/docs" target="_blank">Documentation</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- WiFi Network Selection Modal -->
+  <div id="wifiModal" class="modal-overlay">
+    <div class="modal">
+      <h3><i class="ti ti-wifi"></i> Select WiFi Network</h3>
+      <div id="wifiNetworkList"></div>
+      <button id="wifiCancelBtn" class="btn btn-secondary" onclick="closeWifiModal()" style="margin-top: 1rem;">
+        Cancel
+      </button>
+    </div>
+  </div>
+
+  <!-- Flash Complete Modal -->
+  <div id="flashCompleteModal" class="modal-overlay">
+    <div class="modal" style="text-align: center;">
+      <div style="width: 48px; height: 48px; background: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h3 style="margin-bottom: 0.5rem;">Flash Complete</h3>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+        pyDirect firmware installed successfully.<br>
+        Ready for WiFi configuration.
+      </p>
+      <button id="proceedWifiSetupBtn" class="btn btn-primary">
+        Configure WiFi
+      </button>
+      <button id="skipWifiSetupBtn" class="btn btn-secondary">
+        Skip for now
+      </button>
     </div>
   </div>
 
   <script type="module">
     import { ESPLoader } from './assets/libs/tasmota-esptool-v7-real.bundle.js';
     import forge from 'https://esm.sh/node-forge@1.3.1';
+
+    // ========== VIEW NAVIGATION ==========
+    
+    function showView(viewId) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(viewId)?.classList.add('active');
+    }
+    
+    // Expose to global scope for onclick handlers
+    window.goHome = function() {
+      showView('viewLanding');
+      resetState();
+    };
+    
+    // Go back to scenario selection, re-entering bootloader if needed
+    window.goBackToScenarios = async function() {
+      addLog('Returning to scenario selection...');
+      console.log('[goBackToScenarios] currentPort:', currentPort);
+      console.log('[goBackToScenarios] currentLoader:', currentLoader);
+      
+      // If we have a port but no loader, we need to re-enter bootloader
+      if (currentPort && !currentLoader) {
+        try {
+          addLog('Re-entering bootloader mode...');
+          
+          // Close port if open (might be in REPL mode)
+          try { await currentPort.close(); } catch(e) {}
+          
+          // Re-open at bootloader baud rate
+          await currentPort.open({ baudRate: 115200 });
+          
+          // Create new ESPLoader and sync
+          const loader = new ESPLoader(currentPort, { log: console.log, debug: console.debug, error: console.error });
+          
+          // Try to sync with bootloader (this does the reset sequence)
+          const synced = await loader.connect();
+          if (!synced) {
+            throw new Error('Failed to sync with bootloader');
+          }
+          
+          // Run stub for better performance
+          const stubLoader = await loader.runStub();
+          currentLoader = stubLoader || loader;
+          
+          addLog('Bootloader reconnected');
+        } catch (e) {
+          addLog(`Reconnect failed: ${e.message}`);
+          // Fall back to full reset - user will need to re-select port
+          goHome();
+          return;
+        }
+      }
+      
+      // Show scenario selection
+      showView('viewScenario');
+    };
+    
+    window.selectScenario = function(scenario) {
+      currentScenario = scenario;
+      addLog(`Selected: ${scenario}`);
+      
+      switch(scenario) {
+        case 'new':
+          // Already connected via bootloader, go directly to step 2 (firmware selection)
+          showView('viewNewDevice');
+          updateProgressSteps(2);
+          showNewDeviceStep(2);
+          // Update device info in step 2
+          document.getElementById('detectedChip').textContent = detectedChipName;
+          document.getElementById('detectedMac').textContent = detectedMacAddress;
+          break;
+        case 'forgot':
+          showView('viewForgot');
+          // Immediately transition from bootloader to REPL using existing port
+          addLog('Transitioning to REPL mode...');
+          readCredentials();
+          break;
+        case 'wifi':
+          showView('viewWifi');
+          // Immediately transition from bootloader to REPL using existing port
+          addLog('Transitioning to REPL mode...');
+          performWifiSetup();
+          break;
+        case 'rebless':
+          showView('viewRebless');
+          // Immediately transition from bootloader to REPL using existing port
+          addLog('Transitioning to REPL mode...');
+          startRebless();
+          break;
+      }
+    };
+    
+    function updateProgressSteps(current) {
+      for (let i = 1; i <= 4; i++) {
+        const step = document.getElementById(`step${i}`);
+        if (!step) continue;
+        step.classList.remove('active', 'complete');
+        if (i < current) step.classList.add('complete');
+        if (i === current) step.classList.add('active');
+      }
+    }
+    
+    function showNewDeviceStep(stepNum) {
+      for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById(`newStep${i}`);
+        if (el) el.style.display = i === stepNum ? 'block' : 'none';
+      }
+      updateProgressSteps(stepNum);
+    }
+    
+    // ========== TERMINAL ==========
+    
+    window.toggleTerminal = function() {
+      document.getElementById('terminalWrapper')?.classList.toggle('collapsed');
+    };
+    
+    function addLog(msg) {
+      const log = document.getElementById('debugLog');
+      if (!log) return;
+      const line = document.createElement('div');
+      line.textContent = `> ${msg}`;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+      // Auto-expand terminal when logging
+      document.getElementById('terminalWrapper')?.classList.remove('collapsed');
+    }
+    
+    function clearLog() {
+      const log = document.getElementById('debugLog');
+      if (log) log.innerHTML = '<div>> Ready</div>';
+    }
+    
+    // ========== MODAL HELPERS ==========
+    
+    window.closeWifiModal = function() {
+      document.getElementById('wifiModal')?.classList.remove('active');
+    };
+    
+    function showWifiModal() {
+      document.getElementById('wifiModal')?.classList.add('active');
+    }
+    
+    // ========== COPY TO CLIPBOARD ==========
+    
+    window.copyToClipboard = async function(elementId) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      
+      const text = el.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        
+        // Find the copy button and show feedback
+        const btn = el.closest('.value-row')?.querySelector('.btn-copy i');
+        if (btn) {
+          btn.className = 'ti ti-check';
+          setTimeout(() => { btn.className = 'ti ti-copy'; }, 1500);
+        }
+        addLog(`Copied: ${text}`);
+      } catch (err) {
+        addLog('Copy failed');
+      }
+    };
+    
+    // ========== UNIFIED CONNECTION AT LANDING ==========
+    
+    let isBlankDevice = true; // True if no pyDirect firmware detected
+    
+    window.connectAndDetect = async function() {
+      const btn = document.getElementById('landingConnectBtn');
+      
+      // Clear previous logs
+      clearLog();
+      
+      // Ensure any previous connection is fully closed
+      try {
+        if (currentLoader) {
+          await currentLoader.disconnect();
+          currentLoader = null;
+        }
+        if (currentPort) {
+          await currentPort.close();
+          currentPort = null;
+        }
+      } catch (e) {
+        console.log('Cleanup previous connection:', e);
+      }
+      
+      try {
+        btn.innerHTML = '<i class="ti ti-loader"></i> Connecting...';
+        btn.disabled = true;
+        addLog('Requesting serial port...');
+        
+        // Request a new port
+        currentPort = await navigator.serial.requestPort({});
+        await currentPort.open({ baudRate: 115200 });
+        addLog('Port opened');
+        
+        // ALWAYS start with bootloader detection (most reliable)
+        addLog('Detecting hardware...');
+        const result = await detectHardware(currentPort);
+        detectedChipName = result.chipName;
+        detectedMacAddress = result.macAddress;
+        // Note: currentLoader is set as a side-effect inside detectHardware()
+        
+        addLog(`Detected: ${detectedChipName}`);
+        addLog(`MAC: ${detectedMacAddress}`);
+        
+        // For now, treat all bootloader-connected devices as "blank" 
+        // (they need firmware to have ScriptO Studio)
+        // TODO: Read NVS partition to detect magic marker for existing installs
+        isBlankDevice = true;
+        
+        // Update device info display
+        document.getElementById('connectedChipName').textContent = detectedChipName;
+        
+        // Show scenarios
+        document.getElementById('landingConnect').style.display = 'none';
+        document.getElementById('landingScenarios').style.display = 'block';
+        
+        if (isBlankDevice) {
+          document.getElementById('deviceStatus').textContent = 'Ready to Flash';
+          document.getElementById('scenarioNew').style.borderColor = 'var(--primary)';
+          // Note: User can still try other options - they'll work if device has firmware
+          addLog('Device connected - select an action');
+        } else {
+          document.getElementById('deviceStatus').textContent = 'ScriptO Ready';
+          document.getElementById('deviceStatus').style.background = 'var(--success)';
+          addLog('ScriptO Studio detected - choose an action');
+        }
+        
+      } catch (error) {
+        console.error('Connection error:', error);
+        addLog(`Error: ${error.message}`);
+        btn.innerHTML = '<i class="ti ti-usb"></i> Connect Device';
+        btn.disabled = false;
+        
+        try { if (currentPort) await currentPort.close(); } catch (e) {}
+        currentPort = null;
+        currentLoader = null;
+      }
+    };
+    
+    window.disconnectDevice = async function() {
+      try {
+        if (currentLoader) {
+          await currentLoader.disconnect();
+          currentLoader = null;
+        }
+        if (currentPort) {
+          await currentPort.close();
+          currentPort = null;
+        }
+      } catch (e) {}
+      
+      // Reset UI
+      document.getElementById('landingConnect').style.display = 'block';
+      document.getElementById('landingScenarios').style.display = 'none';
+      document.getElementById('landingConnectBtn').innerHTML = '<i class="ti ti-usb"></i> Connect Device';
+      document.getElementById('landingConnectBtn').disabled = false;
+      document.getElementById('scenarioNew').style.borderColor = '';
+      document.getElementById('scenarioForgot').style.opacity = '';
+      document.getElementById('scenarioWifi').style.opacity = '';
+      document.getElementById('scenarioRebless').style.opacity = '';
+      document.getElementById('deviceStatus').style.background = '';
+      
+      addLog('Disconnected');
+    };
 
     // Generate self-signed certificate for device HTTPS
     function generateSelfSignedCert(hostname, validityYears = 10) {
@@ -503,16 +1123,12 @@
       };
     }
 
-    const deviceInfo = document.getElementById('deviceInfo');
-    const firmwareInfo = document.getElementById('firmwareInfo');
+    // ========== DOM ELEMENTS ==========
     const chipNameEl = document.getElementById('chipName');
     const flashSizeEl = document.getElementById('flashSize');
     const psramSizeEl = document.getElementById('psramSize');
     const macAddressEl = document.getElementById('macAddress');
     const selectedFirmwareEl = document.getElementById('selectedFirmware');
-    const connectBtn = document.getElementById('connectBtn');
-    const flashBtn = document.getElementById('flashBtn');
-    const wifiSetupBtn = document.getElementById('wifiSetupBtn');
     const productSelect = document.getElementById('productSelect');
     const productDropdown = document.getElementById('productDropdown');
 
@@ -523,6 +1139,22 @@
     let detectedMacAddress = null;
     let selectedProduct = null;
     let releaseInfo = null;  // Cache release info
+    let currentScenario = null;  // Track active scenario
+    
+    function resetState() {
+      if (currentPort) {
+        try { currentPort.close(); } catch(e) {}
+      }
+      currentPort = null;
+      currentLoader = null;
+      detectedChipName = null;
+      detectedMacAddress = null;
+      selectedProduct = null;
+      currentScenario = null;
+      clearLog();
+      // Reset new device flow to step 1
+      showNewDeviceStep(1);
+    }
 
     // GitHub repository for firmware releases
     const GITHUB_REPO = 'jetpax/pyDirect';
@@ -819,46 +1451,43 @@
       return { chipName, flashSizeMB, psramInfo, macAddress };
     }
 
-    // Wire up the connect button
-    connectBtn.addEventListener('click', async () => {
+    // ========== CONNECT DEVICE (New Device Flow) ==========
+    window.connectDevice = async function() {
+      const btn = document.getElementById('connectBtn');
       try {
-        connectBtn.textContent = 'Connecting...';
-        connectBtn.disabled = true;
+        btn.textContent = 'Connecting...';
+        btn.disabled = true;
+        addLog('Requesting serial port...');
 
         // Request serial port
         currentPort = await navigator.serial.requestPort({});
         await currentPort.open({ baudRate: 115200 });
+        addLog('Port opened at 115200 baud');
 
         // Perform detection
+        addLog('Detecting hardware...');
         const result = await detectHardware(currentPort);
         detectedChipName = result.chipName;
         detectedMacAddress = result.macAddress;
+        addLog(`Detected: ${result.chipName}, Flash: ${result.flashSizeMB}`);
 
-        // Update button and show flash button
-        connectBtn.style.display = 'none';  // Hide connect button, status shown in device card
-        
-        // Show the flash button and debug button (port stays open)
-        flashBtn.style.display = 'block';
-        wifiSetupBtn.style.display = 'block';
+        // Move to step 2
+        showNewDeviceStep(2);
 
       } catch (error) {
         console.error('Detection error:', error);
-        connectBtn.textContent = 'Connection Failed - Try Again';
-        connectBtn.disabled = false;
-        connectBtn.style.background = 'var(--primary)';
+        addLog(`Error: ${error.message}`);
+        btn.textContent = 'Connect to ESP32';
+        btn.disabled = false;
         
         // Clean up on error
         if (currentPort) {
-          try {
-            await currentPort.close();
-          } catch (e) {}
+          try { await currentPort.close(); } catch (e) {}
           currentPort = null;
         }
         currentLoader = null;
-        
-        alert('Failed to connect: ' + error.message);
       }
-    });
+    };
 
     // REPL Communication Helpers
     async function sendCtrlC(port) {
@@ -969,8 +1598,8 @@ print('KEY_OK')
       addDebugLog('> Certificates installed!');
     }
 
-    // Core WiFi setup function - can be called after flash or from button
-    async function performWifiSetup(needsReconnect = false) {
+    // Core WiFi setup function - transitions from bootloader to REPL and configures WiFi
+    async function performWifiSetup() {
       const debugLog = document.getElementById('debugLog');
       debugLog.style.display = 'block';
       debugLog.innerHTML = '';
@@ -984,32 +1613,23 @@ print('KEY_OK')
       
       try {
         wifiSetupBtn.style.display = 'block';
-        wifiSetupBtn.textContent = 'Connecting to device...';
+        wifiSetupBtn.textContent = 'Rebooting to MicroPython...';
         wifiSetupBtn.disabled = true;
         
-        if (needsReconnect) {
-          addDebugLog('> Reconnecting to device at 115200 baud...');
-          
-          // Need to request serial port again after flash
-          currentPort = await navigator.serial.requestPort();
-          await currentPort.open({ baudRate: 115200 });
-          currentLoader = null; // We're in MicroPython mode now, not bootloader
-          
-          addDebugLog('> Connected! Resetting device...');
-        } else {
-          addDebugLog('> Switching to 115200 and resetting...');
-          
-          // Disconnect loader if we have one
-          if (currentLoader) {
-            await currentLoader.disconnect();
-            currentLoader = null;
-          }
-          
-          // Close and reopen at MicroPython baud rate
-          await currentPort.close();
+        addDebugLog('> Switching to 115200 and resetting...');
+        
+        // Disconnect loader if we have one
+        if (currentLoader) {
+          await currentLoader.disconnect();
+          currentLoader = null;
+          // Wait for streams to fully release
           await new Promise(resolve => setTimeout(resolve, 100));
-          await currentPort.open({ baudRate: 115200 });
         }
+        
+        // Close and reopen at MicroPython baud rate FIRST
+        await currentPort.close();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await currentPort.open({ baudRate: 115200 });
         
         wifiSetupBtn.textContent = 'Resetting device...';
         
@@ -1150,9 +1770,10 @@ print("JSON:" + json.dumps(result))
             const list = document.getElementById('wifiNetworkList');
             const cancelBtn = document.getElementById('wifiCancelBtn');
             
-            // Build network list HTML
+            // Build network list HTML with Tabler icons
             list.innerHTML = networks.map((n, i) => {
               const bars = n.rssi >= -50 ? '▂▄▆█' : n.rssi >= -60 ? '▂▄▆_' : n.rssi >= -70 ? '▂▄__' : n.rssi >= -80 ? '▂___' : '▂___';
+              const lockIcon = n.sec ? '<i class="ti ti-lock" style="margin-right: 0.25rem;"></i>' : '';
               return `<button class="wifi-item" data-index="${i}" style="
                 width: 100%;
                 display: flex;
@@ -1168,12 +1789,12 @@ print("JSON:" + json.dumps(result))
                 transition: all 0.2s;
               " onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='transparent'">
                 <span style="font-weight: 500;">${n.ssid}</span>
-                <span style="font-family: monospace; opacity: 0.7;">${n.sec ? '🔒 ' : ''}${bars}</span>
+                <span style="font-family: monospace; opacity: 0.7;">${lockIcon}${bars}</span>
               </button>`;
             }).join('');
             
-            // Show modal
-            modal.style.display = 'flex';
+            // Show modal using classList
+            modal.classList.add('active');
             
             // Handle network click
             const handleClick = (e) => {
@@ -1192,7 +1813,7 @@ print("JSON:" + json.dumps(result))
             };
             
             const cleanup = () => {
-              modal.style.display = 'none';
+              modal.classList.remove('active');
               list.removeEventListener('click', handleClick);
               cancelBtn.removeEventListener('click', handleCancel);
             };
@@ -1308,37 +1929,32 @@ print("SETUP_MODE_SET")
         addDebugLog('> Resetting device...');
         await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
         
-        // Close port and redirect to device setup page
-        const setupUrl = `https://${certHostname}/setup`;
-        addDebugLog(`> Device will boot into setup mode`);
-        addDebugLog(`> Redirecting to ${setupUrl} in 5 seconds...`);
-        
+        // Close port
         await currentPort.close();
         currentPort = null;
         
-        // Brief pause for device to boot, then redirect
-        wifiSetupBtn.textContent = '✓ Redirecting to device setup...';
-        wifiSetupBtn.style.background = '#10b981';
+        // Show Step 4 with device link and browser warning guidance
+        const setupUrl = `https://${certHostname}/setup`;
+        addDebugLog(`> Device ready at ${setupUrl}`);
         
-        setTimeout(() => {
-          window.location.href = setupUrl;
-        }, 5000); // 5 seconds for device to boot and start HTTPS
+        // Update Step 4 UI
+        document.getElementById('finalHostname').textContent = certHostname;
+        document.getElementById('deviceLink').href = setupUrl;
         
-        // Note: The UI reset below won't run since we're redirecting,
-        // but keeping it for cases where redirect might fail
-        setTimeout(() => {
-          connectBtn.textContent = 'Connect & Install pyDirect';
-          connectBtn.disabled = false;
-          connectBtn.style.background = 'var(--primary)';
-          flashBtn.style.display = 'none';
-          wifiSetupBtn.style.display = 'none';
-          wifiSetupBtn.style.background = '#8b5cf6';
-          wifiSetupBtn.textContent = '📡 WiFi Setup';
-          wifiSetupBtn.disabled = false;
-        }, 10000);
+        // Show Step 4
+        updateProgressSteps(4);
+        showNewDeviceStep(4);
+        
+        addDebugLog('> Setup complete! Click "Open Device Setup" to continue.');
 
 
       } catch (error) {
+        // Handle user cancellation gracefully (don't show error)
+        if (error.message?.includes('cancelled')) {
+          console.log('WiFi setup cancelled by user');
+          return;
+        }
+        
         console.error('WiFi setup error:', error);
         wifiSetupBtn.textContent = '📡 Debug: WiFi Setup via REPL';
         wifiSetupBtn.disabled = false;
@@ -1357,10 +1973,10 @@ print("SETUP_MODE_SET")
     wifiSetupBtn.addEventListener('click', async () => {
       if (!currentPort && !currentLoader) {
         // No active connection - need to reconnect
-        await performWifiSetup(true);
+        await performWifiSetup();
       } else {
         // Have a connection (either from bootloader or already in MicroPython)
-        await performWifiSetup(false);
+        await performWifiSetup();
       }
     });
     
@@ -1369,7 +1985,7 @@ print("SETUP_MODE_SET")
       // Hide the modal
       document.getElementById('flashCompleteModal').style.display = 'none';
       // Start WiFi setup - we have the port reference, just need to switch baud rate
-      await performWifiSetup(false);
+      await performWifiSetup();
     });
     
     document.getElementById('skipWifiSetupBtn').addEventListener('click', async () => {
@@ -1390,122 +2006,310 @@ print("SETUP_MODE_SET")
       currentLoader = null;
     });
 
-    // Wire up the flash button
-    flashBtn.addEventListener('click', async () => {
+    // ========== FLASH FIRMWARE ==========
+    window.flashFirmware = async function() {
+      const btn = document.getElementById('flashBtn');
       if (!currentPort || !currentLoader) {
-        alert('No device connected. Please connect first.');
+        addLog('Error: No device connected');
         return;
       }
 
       if (!selectedProduct) {
-        alert('No firmware selected. Please select a product from the dropdown.');
+        addLog('Error: No firmware selected');
+        return;
+      }
+      
+      // Confirmation dialog
+      const confirmed = confirm(
+        `⚠️ FLASH FIRMWARE ⚠️\n\n` +
+        `This will ERASE all data on the device and install:\n` +
+        `${selectedProduct.name}\n\n` +
+        `Any existing scripts, settings, and certificates will be PERMANENTLY DELETED.\n\n` +
+        `Are you sure you want to continue?`
+      );
+      
+      if (!confirmed) {
+        addLog('Flash cancelled by user');
         return;
       }
 
       try {
-        flashBtn.textContent = 'Downloading firmware...';
-        flashBtn.disabled = true;
+        btn.textContent = 'Downloading...';
+        btn.disabled = true;
+        addLog(`Downloading ${selectedProduct.name}...`);
 
-        // Use relative path first (same-origin on GitHub Pages), fallback to CORS proxy
-        console.log('Selected product:', selectedProduct);
-        console.log('Relative path:', selectedProduct.relativePath);
-        console.log('GitHub URL:', selectedProduct.downloadUrl);
-
-        // Download the firmware - try relative path first (same-origin, no CORS needed)
+        // Download the firmware
         let firmwareResp;
         try {
-          console.log('Trying relative path:', selectedProduct.relativePath);
           firmwareResp = await fetch(selectedProduct.relativePath);
-          if (!firmwareResp.ok) throw new Error(`Relative path failed: ${firmwareResp.status}`);
-        } catch (relativeError) {
-          // Relative path failed, try CORS proxy with GitHub URL
-          console.log('Relative path failed, trying CORS proxy...', relativeError.message);
+          if (!firmwareResp.ok) throw new Error('Local not found');
+        } catch (e) {
+          addLog('Using CORS proxy...');
           const proxyUrl = CORS_PROXY + encodeURIComponent(selectedProduct.downloadUrl);
           firmwareResp = await fetch(proxyUrl);
         }
         
-        if (!firmwareResp.ok) {
-          throw new Error(`Failed to download firmware: ${firmwareResp.status}`);
-        }
+        if (!firmwareResp.ok) throw new Error(`Download failed: ${firmwareResp.status}`);
         const data = new Uint8Array(await firmwareResp.arrayBuffer());
-        console.log(`Downloaded ${data.length} bytes`);
+        addLog(`Downloaded ${(data.length / 1024 / 1024).toFixed(1)} MB`);
         
-        // Verify bootloader connection is still valid
-        flashBtn.textContent = 'Syncing with device...';
+        // Sync and flash
+        btn.textContent = 'Syncing...';
         try {
           await currentLoader.sync();
-          console.log('Bootloader sync successful');
-        } catch (syncErr) {
-          console.warn('Sync failed, trying to reinitialize...', syncErr);
-          // Try to reinitialize the connection
+        } catch (e) {
           await currentLoader.initialize();
-          console.log('Reinitialize successful');
         }
         
-        // Flash merged firmware at offset 0
-        flashBtn.textContent = 'Flashing...';
-        console.log('About to call flashData...');
+        btn.textContent = 'Flashing...';
+        addLog('Flashing firmware...');
         let progressPercent = 0;
+        
         try {
           await currentLoader.flashData(
-            data.buffer,  // Use .buffer property like ESPConnect
+            data.buffer,
             (bytesWritten, totalBytes) => {
               progressPercent = Math.floor((bytesWritten / totalBytes) * 100);
-              flashBtn.textContent = `Flashing: ${progressPercent}%`;
+              btn.textContent = `Flashing: ${progressPercent}%`;
+              if (progressPercent % 10 === 0) addLog(`Progress: ${progressPercent}%`);
             },
-            0,    // offset = 0 for merged firmware
-            true  // compress = true (ESPConnect uses compression)
+            0, true
           );
-          console.log(`flashData completed successfully - ${progressPercent}%`);
         } catch (flashError) {
-          // Check if this is the finalization timeout (device already rebooted)
           const errorMsg = flashError?.message || String(flashError);
-          
-          // If we're at or near 100% and get a timeout, the flash completed and device rebooted
-          if (errorMsg.includes('Timed out waiting for packet header') && progressPercent >= 95) {
-            // Flash completed successfully, device rebooted before finalization response
-            console.log(`Flash completed successfully (device rebooted at ${progressPercent}%)`);
+          if (errorMsg.includes('Timed out') && progressPercent >= 95) {
+            addLog('Flash complete (device rebooted)');
           } else {
-            // Actual error
-            console.error(`Flash failed at ${progressPercent}%:`, flashError);
             throw flashError;
           }
         }
 
-        flashBtn.textContent = '✓ Flash Complete!';
-        flashBtn.style.background = '#10b981';
+        addLog('✓ Flash complete!');
+        btn.textContent = '✓ Complete';
         
-        // Clean up bootloader connection but keep port reference
-        try {
-          await currentLoader.disconnect();
-        } catch (e) {}
+        try { await currentLoader.disconnect(); } catch (e) {}
         currentLoader = null;
-        // Note: Don't close currentPort here - performWifiSetup will handle
-        // the close/reopen sequence when user clicks "Configure WiFi Now"
         
-        // Show the Flash Complete modal
-        const flashCompleteModal = document.getElementById('flashCompleteModal');
-        flashCompleteModal.style.display = 'flex';
+        // Show modal
+        document.getElementById('flashCompleteModal')?.classList.add('active');
 
       } catch (error) {
         console.error('Flash error:', error);
-        flashBtn.textContent = 'Flash Failed - Reconnect to Retry';
-        flashBtn.disabled = false;
-        alert('Failed to flash firmware: ' + error.message);
+        addLog(`Flash failed: ${error.message}`);
+        btn.textContent = 'Flash Failed';
+        btn.disabled = false;
         
-        // Clean up on error
-        try {
-          if (currentPort) await currentPort.close();
-        } catch (e) {}
+        try { if (currentPort) await currentPort.close(); } catch (e) {}
         currentPort = null;
         currentLoader = null;
-        
-        // Reset UI
-        connectBtn.textContent = 'Connect & Install pyDirect';
-        connectBtn.disabled = false;
-        connectBtn.style.background = 'var(--primary)';
-        flashBtn.style.display = 'none';
       }
+    };
+
+    // ========== CREDENTIAL RECOVERY (uses pre-connected port) ==========
+    async function readCredentials() {
+      const credsDiv = document.getElementById('forgotCredentials');
+      
+      try {
+        addLog('Reading credentials from device...');
+        
+        // Transition from bootloader to REPL
+        addLog('Switching to REPL mode...');
+        
+        // Disconnect loader if we have one
+        if (currentLoader) {
+          await currentLoader.disconnect();
+          currentLoader = null;
+        }
+        
+        // Close and reopen at MicroPython baud rate
+        await currentPort.close();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await currentPort.open({ baudRate: 115200 });
+        
+        // Reset the device to normal boot (not download mode)
+        // DTR=false keeps GPIO0 high (normal boot mode)
+        // Pulse RTS to trigger reset
+        await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await currentPort.setSignals({ dataTerminalReady: false, requestToSend: true }); // Assert reset
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false }); // Release reset
+        
+        addLog('Waiting for device to boot...');
+        await new Promise(r => setTimeout(r, 2000));
+        
+        // Interrupt any running code and get to REPL
+        await sendCtrlC(currentPort);
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Read settings
+        const output = await sendREPLCommand(currentPort, `
+import json
+from lib.sys import settings
+hostname = settings.get("device.hostname", "unknown")
+password = settings.get("server.webrepl_password", "not set")
+ssid = settings.get("wifi.ssid", "not set")
+print("CREDS:" + json.dumps({"h": hostname, "p": password, "s": ssid}))
+`);
+        
+        const match = output.match(/CREDS:(\{.*\})/);
+        if (match) {
+          const creds = JSON.parse(match[1]);
+          document.getElementById('recoveredHostname').textContent = creds.h + '.local';
+          document.getElementById('recoveredPassword').textContent = creds.p;
+          document.getElementById('recoveredSSID').textContent = creds.s;
+          addLog(`Found: ${creds.h}.local`);
+          if (credsDiv) credsDiv.style.display = 'block';
+        } else {
+          throw new Error('Could not read settings - device may need firmware');
+        }
+        
+      } catch (error) {
+        addLog(`Error: ${error.message}`);
+      }
+    }
+
+    // ========== RE-PROVISION (uses pre-connected port) ==========
+    async function startRebless() {
+      try {
+        addLog('Starting re-provisioning...');
+        
+        // Follow the same pattern as performWifiSetup (proven to work)
+        addLog('Switching to REPL mode...');
+        
+        // Disconnect loader if we have one
+        if (currentLoader) {
+          await currentLoader.disconnect();
+          currentLoader = null;
+        }
+        
+        // Close and reopen at MicroPython baud rate
+        await currentPort.close();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await currentPort.open({ baudRate: 115200 });
+        
+        // Reset the device to normal boot (not download mode)
+        await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await currentPort.setSignals({ dataTerminalReady: false, requestToSend: true }); // Assert reset
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false }); // Release reset
+        
+        addLog('Waiting for device to boot...');
+        await new Promise(r => setTimeout(r, 2000));
+        
+        await sendCtrlC(currentPort);
+        await new Promise(r => setTimeout(r, 300));
+        
+        // Read current hostname
+        const output = await sendREPLCommand(currentPort, `
+from lib.sys import settings
+print("HOST:" + settings.get("device.hostname", "pydirect-xxxx"))
+`);
+        
+        const match = output.match(/HOST:(.+)/);
+        const hostname = match ? match[1].trim() : 'pydirect-new';
+        
+        addLog(`Generating new certificate for ${hostname}.local...`);
+        const certHostname = hostname + '.local';
+        const { certPem, keyPem } = generateSelfSignedCert(certHostname);
+        
+        addLog('Installing new certificate...');
+        await uploadCertsToDevice(currentPort, certPem, keyPem, addLog);
+        
+        // Set new password via prompt
+        const newPassword = prompt('Enter new WebREPL password:');
+        if (newPassword) {
+          await sendREPLCommand(currentPort, `
+from lib.sys import settings
+settings.set("server.webrepl_password", "${newPassword}")
+settings.set("setup_mode", False)
+settings.save()
+print("SAVED")
+`, 5000, false);
+          addLog('New password saved');
+        }
+        
+        addLog('Restarting device...');
+        await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
+        
+        await currentPort.close();
+        currentPort = null;
+        
+        addLog(`✓ Re-provisioning complete!`);
+        addLog(`Connect at: https://${certHostname}`);
+        
+      } catch (error) {
+        addLog(`Error: ${error.message}`);
+      }
+    }
+    
+    window.connectForRebless = async function() {
+      try {
+        addLog('Connecting for re-provisioning...');
+        
+        currentPort = await navigator.serial.requestPort({});
+        await currentPort.open({ baudRate: 115200 });
+        addLog('Connected');
+        
+        await sendCtrlC(currentPort);
+        await new Promise(r => setTimeout(r, 300));
+        
+        // Read current hostname
+        const output = await sendREPLCommand(currentPort, `
+from lib.sys import settings
+print("HOST:" + settings.get("device.hostname", "pydirect-xxxx"))
+`);
+        
+        const match = output.match(/HOST:(.+)/);
+        const hostname = match ? match[1].trim() : 'pydirect-new';
+        
+        addLog(`Generating new certificate for ${hostname}.local...`);
+        const certHostname = hostname + '.local';
+        const { certPem, keyPem } = generateSelfSignedCert(certHostname);
+        
+        addLog('Installing new certificate...');
+        await uploadCertsToDevice(currentPort, certPem, keyPem, addLog);
+        
+        // Set new password via prompt
+        const newPassword = prompt('Enter new WebREPL password:');
+        if (newPassword) {
+          await sendREPLCommand(currentPort, `
+from lib.sys import settings
+settings.set("server.webrepl_password", "${newPassword}")
+settings.set("setup_mode", False)
+settings.save()
+print("SAVED")
+`, 5000, false);
+          addLog('New password saved');
+        }
+        
+        addLog('Restarting device...');
+        await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
+        
+        await currentPort.close();
+        currentPort = null;
+        
+        addLog(`✓ Re-provisioning complete!`);
+        addLog(`Connect at: https://${certHostname}`);
+        
+      } catch (error) {
+        addLog(`Error: ${error.message}`);
+        try { if (currentPort) await currentPort.close(); } catch (e) {}
+        currentPort = null;
+      }
+    };
+
+    // ========== MODAL HANDLERS ==========
+    document.getElementById('proceedWifiSetupBtn')?.addEventListener('click', async () => {
+      document.getElementById('flashCompleteModal')?.classList.remove('active');
+      showNewDeviceStep(3);
+      await performWifiSetup();
+    });
+    
+    document.getElementById('skipWifiSetupBtn')?.addEventListener('click', () => {
+      document.getElementById('flashCompleteModal')?.classList.remove('active');
+      goHome();
     });
   </script>
 </body>
