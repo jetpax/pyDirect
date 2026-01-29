@@ -886,8 +886,14 @@
           await new Promise(r => setTimeout(r, 100));
         }
         
-        // Send code and execute with Ctrl+D
-        await writer.write(new TextEncoder().encode(cleanCode));
+        // Send code in chunks to avoid buffer issues with Web Serial
+        const encoded = new TextEncoder().encode(cleanCode);
+        const CHUNK_SIZE = 64;  // Small chunks to ensure delivery
+        for (let i = 0; i < encoded.length; i += CHUNK_SIZE) {
+          const chunk = encoded.slice(i, Math.min(i + CHUNK_SIZE, encoded.length));
+          await writer.write(chunk);
+          await new Promise(r => setTimeout(r, 10));  // Small delay for buffer flush
+        }
         await new Promise(r => setTimeout(r, 50));
         await writer.write(new Uint8Array([0x04])); // Ctrl+D - execute
         writer.releaseLock();
@@ -906,13 +912,12 @@
           if (done) break;
           if (value) {
             output += decoder.decode(value);
-
-            
             if (output.includes('OK') && output.endsWith('>')) {
               break;
             }
           }
         }
+
 
         
         // Stay in raw REPL mode - don't exit (no Ctrl+B)
@@ -1062,6 +1067,33 @@ print('KEY_OK')
         
         // Brief pause for interrupt to take effect
         await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Drain pending data from serial buffer (boot messages, prompts, etc.)
+        // This prevents old data from corrupting command/response parsing
+        addDebugLog('> Draining serial buffer...');
+        try {
+          const drainReader = currentPort.readable.getReader();
+          let drained = 0;
+          const drainTimeout = setTimeout(() => {
+            console.log('[DRAIN] Timeout - cancelling reader');
+            drainReader.cancel();
+          }, 500);
+          try {
+            while (true) {
+              const { value, done } = await drainReader.read();
+              if (done) break;
+              if (value) drained += value.length;
+            }
+          } catch (e) {
+            // Expected - cancel() causes read to throw
+          }
+          clearTimeout(drainTimeout);
+          drainReader.releaseLock();
+          console.log('[DRAIN] Drained', drained, 'bytes');
+          addDebugLog(`> Drained ${drained} bytes`);
+        } catch (e) {
+          console.log('[DRAIN] Error:', e);
+        }
         
         addDebugLog('> Scanning for WiFi networks...');
         wifiSetupBtn.textContent = 'Scanning networks...';
