@@ -38,6 +38,8 @@ Flash pyDirect directly from your browser - no tools required:
 
 > **Requires:** Chrome, Edge, or Opera on desktop. Automatically detects your ESP32 chip type!
 
+For detailed setup instructions including WiFi configuration and password setup, see the **[Getting Started Guide](https://github.com/jetpax/scriptostudio/wiki/Getting-Started)**.
+
 ### Pre-Built Firmware
 
 Download pre-built firmware for your board from [Releases](https://github.com/jetpax/pyDirect/releases):
@@ -259,6 +261,8 @@ See [.github/workflows/build-firmware.yml](.github/workflows/build-firmware.yml)
 
 ## 📚 Documentation
 
+- **[ScriptO Studio Wiki](https://github.com/jetpax/scriptostudio/wiki)** - Comprehensive user guide
+- **[Getting Started](https://github.com/jetpax/scriptostudio/wiki/Getting-Started)** - First-time setup
 - **[Build Guide](docs/BUILD_GUIDE.md)** - Detailed build instructions
 - **[Production Certificates](docs/PRODUCTION_CERTIFICATES.md)** - HTTPS/WSS setup
 - **[Module READMEs](.)** - Individual module documentation
