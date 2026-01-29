@@ -4,3 +4,6 @@
 *.pem
 *.key
 AGENTS.md
+
+# Generated at build time from boards/manifests/
+device-scripts/settings/board.json

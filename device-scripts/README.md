@@ -20,8 +20,7 @@ The firmware is fully compatible with **Scripto Studio** - just connect and star
 - `main.py` - Server startup and module initialization
 
 ### Library Files (`lib/`)
-- `board.json` - Board manifest (pin assignments, capabilities)
-- Other helper modules as needed
+- Helper modules for board, networking, and more
 
 ## Board Manifest
 
@@ -60,5 +59,6 @@ BOARD=ESP32_S3 MANIFEST=generic_esp32s3 ./build.sh
 The build process:
 1. Compiles MicroPython firmware
 2. Creates VFS partition from `device-scripts/`
-3. Copies board manifest to `lib/board.json`
+3. Copies board manifest to `settings/board.json`
 4. Merges everything into a single flashable binary
+
