@@ -102,9 +102,9 @@ jobs:
           # Copy runtime manifest to scripts
           MANIFEST_FILE="./boards/manifests/${{ matrix.manifest }}.json"
           if [ -f "$MANIFEST_FILE" ]; then
-            mkdir -p "${SCRIPTS_DIR}/lib"
-            cp "$MANIFEST_FILE" "${SCRIPTS_DIR}/lib/board.json"
-            echo "📋 Copied manifest: ${{ matrix.manifest }}.json → lib/board.json"
+            mkdir -p "${SCRIPTS_DIR}/settings"
+            cp "$MANIFEST_FILE" "${SCRIPTS_DIR}/settings/board.json"
+            echo "📋 Copied manifest: ${{ matrix.manifest }}.json → settings/board.json"
           fi
           
           # Get VFS size from partition table
