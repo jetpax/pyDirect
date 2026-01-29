@@ -706,25 +706,36 @@ def getDeviceURL(path='/'):
     the HTTPS server is actually running. This prevents Mixed Content errors
     when ScriptO Studio is served over HTTPS.
     
+    Uses the mDNS hostname (e.g., pydirect-xxxx.local) instead of IP address
+    to ensure browser certificate trust works correctly in iframes.
+    
     Args:
         path (str): URL path to append (default: '/')
                    Should start with '/' (e.g., '/hello_ui', '/api/data')
     
     Returns:
-        str: Complete URL with protocol, IP, and path
-             Examples: 'https://192.168.1.32/hello_ui'
-                      'http://192.168.1.32/api/data'
+        str: Complete URL with protocol, hostname, and path
+             Examples: 'https://pydirect-2b88.local/hello_ui'
+                      'http://pydirect-2b88.local/api/data'
     
     Example:
         >>> url = getDeviceURL('/my_app/index.html')
         >>> webrepl.display_ui(url, 'My Application')
     
     Note:
+        - Uses mDNS hostname for certificate trust in iframes
         - Checks if httpserver module has HTTPS server running
         - Falls back to HTTP if HTTPS not available
         - This ensures URL protocol matches server configuration
     """
-    ip = getDeviceIP()
+    # Use hostname with .local suffix for mDNS - required for iframe cert trust
+    try:
+        hostname = network.hostname()
+        if hostname and not hostname.endswith('.local'):
+            hostname = f'{hostname}.local'
+    except:
+        # Fallback to IP if hostname not available
+        hostname = getDeviceIP()
     
     # Detect HTTPS support by checking if HTTPS server is running
     protocol = 'http'
@@ -745,7 +756,7 @@ def getDeviceURL(path='/'):
     if not path.startswith('/'):
         path = '/' + path
     
-    return f'{protocol}://{ip}{path}'
+    return f'{protocol}://{hostname}{path}'
 
 def neofetch():
     """
