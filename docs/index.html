@@ -845,17 +845,13 @@
           // Close port if open (might be in REPL mode)
           try { await currentPort.close(); } catch(e) {}
           
-          // Re-open at bootloader baud rate
+          // Re-open at bootloader baud rate (same as connectAndDetect)
           await currentPort.open({ baudRate: 115200 });
           
-          // Create new ESPLoader and sync
+          // Create new ESPLoader and initialize (this does the reset + sync sequence)
+          // Use initialize() like detectHardware() does, not connect()
           const loader = new ESPLoader(currentPort, { log: console.log, debug: console.debug, error: console.error });
-          
-          // Try to sync with bootloader (this does the reset sequence)
-          const synced = await loader.connect();
-          if (!synced) {
-            throw new Error('Failed to sync with bootloader');
-          }
+          await loader.initialize();
           
           // Run stub for better performance
           const stubLoader = await loader.runStub();
@@ -870,8 +866,8 @@
         }
       }
       
-      // Show scenario selection
-      showView('viewScenario');
+      // Show scenario selection (viewLanding has the scenarios)
+      showView('viewLanding');
     };
     
     window.selectScenario = function(scenario) {
