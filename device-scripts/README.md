@@ -25,7 +25,7 @@ The firmware is fully compatible with **Scripto Studio** - just connect and star
 
 ## Board Manifest
 
-Each firmware build includes a board manifest at `/lib/board.json` that describes:
+Each firmware build includes a board manifest at `/settings/board.json` that describes:
 - Board identity (name, chip, vendor)
 - Pin assignments (status LED, CAN, SPI, I2C)
 - Capabilities (WiFi, BLE, Ethernet, CAN)
@@ -34,7 +34,7 @@ Each firmware build includes a board manifest at `/lib/board.json` that describe
 Example usage in MicroPython:
 ```python
 import json
-with open('/lib/board.json') as f:
+with open('/settings/board.json') as f:
     board = json.load(f)
 
 # Get status LED pin

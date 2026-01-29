@@ -4,6 +4,3 @@
 *.pem
 *.key
 AGENTS.md
-
-# Build artifacts (generated from boards/manifests/)
-device-scripts/settings/board.json

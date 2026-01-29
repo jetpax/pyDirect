@@ -52,7 +52,7 @@ All builds are defined in **`.github/build-matrix.json`**:
 | Concern | What varies | Source |
 |---------|-------------|--------|
 | **Build-time** | Flash size, PSRAM, chip SDK config | `boards/<CHIP>/sdkconfig.board` |
-| **Runtime** | Pin assignments, capabilities, devices | `manifests/*.json` → `/lib/board.json` on device |
+| **Runtime** | Pin assignments, capabilities, devices | `manifests/*.json` → `/settings/board.json` on device |
 
 ### Building Locally
 

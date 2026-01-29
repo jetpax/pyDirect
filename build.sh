@@ -224,7 +224,7 @@ fi
 # Copy runtime manifest to device-scripts for board detection
 copy_manifest() {
     local MANIFEST_FILE=""
-    local DEST_DIR="${PYDIRECT_DIR}/device-scripts/settings"
+    local DEST_DIR="${PYDIRECT_DIR}/device-scripts/lib"
     
     if [ -n "$MANIFEST" ]; then
         # Use explicitly specified manifest
@@ -259,7 +259,7 @@ copy_manifest() {
     if [ -n "$MANIFEST_FILE" ] && [ -f "$MANIFEST_FILE" ]; then
         mkdir -p "$DEST_DIR"
         cp "$MANIFEST_FILE" "$DEST_DIR/board.json"
-        echo -e "${GREEN}📋 Copied $(basename $MANIFEST_FILE) → device-scripts/settings/board.json${NC}"
+        echo -e "${GREEN}📋 Copied $(basename $MANIFEST_FILE) → device-scripts/lib/board.json${NC}"
     fi
 }
 
