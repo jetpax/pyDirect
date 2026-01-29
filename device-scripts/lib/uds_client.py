@@ -6,6 +6,9 @@ UDS (Unified Diagnostic Services) client for automotive diagnostics.
 Supports both UDS services and OBD2 modes for compatibility.
 
 Based on ISO 14229 with transport over ISO 15765-2 (ISO-TP).
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import time

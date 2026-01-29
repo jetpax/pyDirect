@@ -4,6 +4,9 @@ UDS Service Definitions (ISO 14229)
 
 Constants for UDS (Unified Diagnostic Services) protocol.
 Includes Service IDs (SID), Sub-functions, and Negative Response Codes (NRC).
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 # =============================================================================

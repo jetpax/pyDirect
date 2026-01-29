@@ -5,7 +5,7 @@ Setup Mode Server
 Minimal HTTPS server for password setup during provisioning.
 Runs instead of main.py when setup_mode flag is set.
 
-Copyright (c) 2026 Jonathan Peace
+Copyright (c) 2026 Jonathan Elliot Peace
 SPDX-License-Identifier: MIT
 """
 

@@ -11,7 +11,7 @@
  * Transport: WebSocket TEXT frames with Content-Length headers
  * Specification: https://microsoft.github.io/debug-adapter-protocol/
  *
- * Copyright (c) 2025 Jonathan Peace
+ * Copyright (c) 2026 Jonathan Elliot Peace
  * SPDX-License-Identifier: MIT
  */
 

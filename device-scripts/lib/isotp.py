@@ -10,6 +10,9 @@ Frame Types:
 - First Frame (FF):       First segment of multi-frame message
 - Consecutive Frame (CF): Subsequent segments
 - Flow Control (FC):      Flow control from receiver
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import time

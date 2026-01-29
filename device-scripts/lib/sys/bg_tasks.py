@@ -25,6 +25,9 @@ Usage:
     bg_tasks.list_tasks()  # -> {"my_task": {"state": "running", "system": False}}
     bg_tasks.stop("my_task")
     bg_tasks.stop_user_tasks()  # Stop all non-system tasks
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import asyncio

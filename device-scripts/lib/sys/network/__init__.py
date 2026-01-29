@@ -13,6 +13,9 @@ Usage:
     network.wifi.init()
     network.eth.init()
     network.wwan.init()
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import asyncio

@@ -6,7 +6,7 @@ Initializes the status LED at boot time.
 
 This file runs automatically on boot.
 
-Copyright (c) 2026 Jonathan Peace
+Copyright (c) 2026 Jonathan Elliot Peace
 SPDX-License-Identifier: MIT
 """
 

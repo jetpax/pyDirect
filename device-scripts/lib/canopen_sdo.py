@@ -14,6 +14,9 @@ OpenInverter Parameter Addressing:
 - Index: 0x2100 + (param_id >> 8)
 - Subindex: param_id & 0xFF
 - Fixed-point format: value * 32
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import struct

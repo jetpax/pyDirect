@@ -7,7 +7,7 @@
  * The WBP protocol uses CBOR-encoded arrays for all messages, with channel
  * numbers discriminating message types.
  *
- * Copyright (c) 2025-2026 Jonathan E. Peace
+ * Copyright (c) 2026 Jonathan Elliot Peace
  * SPDX-License-Identifier: MIT
  */
 

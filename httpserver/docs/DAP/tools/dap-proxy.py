@@ -15,7 +15,7 @@ Usage:
 
 Then configure VS Code to connect to localhost:5678 (or your chosen port).
 
-Copyright (c) 2025 Jonathan Peace
+Copyright (c) 2026 Jonathan Elliot Peace
 SPDX-License-Identifier: MIT
 """
 

@@ -8,7 +8,7 @@ Singletons:
 Color Constants:
 - RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA, WHITE, BLACK, etc.
 
-Copyright (c) 2026 Jonathan Peace
+Copyright (c) 2026 Jonathan Elliot Peace
 SPDX-License-Identifier: MIT
 """
 

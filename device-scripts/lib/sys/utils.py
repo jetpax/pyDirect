@@ -22,6 +22,9 @@ Device URL helpers (return values directly):
 
 Internal helper functions:
 - format_uptime()         - Format uptime in human-readable format
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import json

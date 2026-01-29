@@ -21,6 +21,9 @@ Usage:
 HTTP Endpoints:
     POST /webrtc/offer  - Accept SDP offer, return SDP answer
     GET /webrtc/status  - Get connection status (debugging)
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import webrtc

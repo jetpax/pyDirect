@@ -20,7 +20,7 @@ Usage:
     settings.set("wifi.password", "secret")
     settings.save()
 
-Copyright (c) 2026 Jonathan Peace
+Copyright (c) 2026 Jonathan Elliot Peace
 SPDX-License-Identifier: MIT
 """
 

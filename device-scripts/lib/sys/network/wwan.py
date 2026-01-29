@@ -8,6 +8,9 @@ Usage:
     
     wwan.init()
     await wwan.task()
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import json

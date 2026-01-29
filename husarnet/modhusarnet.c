@@ -4,7 +4,7 @@
  * Wraps the Husarnet ESP32 SDK to provide secure P2P VPN connectivity.
  * Devices get a stable fc94::/16 IPv6 address based on their public key.
  *
- * Copyright (c) 2025 Jonathan Peace
+ * Copyright (c) 2026 Jonathan Elliot Peace
  * SPDX-License-Identifier: MIT
  */
 

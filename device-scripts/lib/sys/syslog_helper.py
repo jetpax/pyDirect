@@ -15,6 +15,9 @@ Usage:
     syslog.info("System started")
     syslog.error("Connection failed", source="webrtc")
     syslog.debug("Debug message", source="network")
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import socket

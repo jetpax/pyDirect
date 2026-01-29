@@ -3,7 +3,7 @@
  *
  * Implementation using iot_usbh_modem V2.0 for AT command and PPP functionality
  *
- * Copyright (c) 2025 Jonathan Peace
+ * Copyright (c) 2026 Jonathan Elliot Peace
  * SPDX-License-Identifier: MIT
  */
 

@@ -5,7 +5,7 @@
  * Protocol (WBP) implementation. It is transport-agnostic and routes all
  * sends through the g_wbp_active_transport interface.
  *
- * Copyright (c) 2025-2026 Jonathan E. Peace
+ * Copyright (c) 2026 Jonathan Elliot Peace
  * SPDX-License-Identifier: MIT
  */
 

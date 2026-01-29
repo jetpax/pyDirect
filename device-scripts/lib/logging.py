@@ -1,3 +1,9 @@
+"""
+MicroPython Logging Module
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
+"""
 from micropython import const
 import io
 import sys

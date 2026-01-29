@@ -8,6 +8,9 @@ Usage:
     
     wifi.init()
     await wifi.task()
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import network

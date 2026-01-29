@@ -14,7 +14,7 @@
  *   webrepl_binary.notify(json)             - Send INFO event
  *   webrepl_binary.log(msg, level, source)  - Send LOG event
  *
- * Copyright (c) 2025-2026 Jonathan E. Peace
+ * Copyright (c) 2026 Jonathan Elliot Peace
  * SPDX-License-Identifier: MIT
  */
 

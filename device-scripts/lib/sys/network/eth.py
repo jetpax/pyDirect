@@ -8,6 +8,9 @@ Usage:
     
     eth.init()
     await eth.task()
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import network

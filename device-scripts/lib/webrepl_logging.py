@@ -11,6 +11,8 @@ log.debug("Debug info")
 log.warning("Something seems off")
 log.error("Something went wrong!")
 
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 import logging
 

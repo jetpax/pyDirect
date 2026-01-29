@@ -24,6 +24,9 @@ Usage:
     # Devices
     eth = board.device("ethernet")
     phy = eth.phy
+
+Copyright (c) 2026 Jonathan Elliot Peace
+SPDX-License-Identifier: MIT
 """
 
 import json

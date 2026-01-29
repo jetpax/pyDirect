@@ -32,7 +32,7 @@ Helper Utilities (imported from lib.sys.utils):
     Note: Small M2M scripts (< 10KB) are client-side inline scripts
     per the M2M sizing principle - not stored on device flash.
 
-Copyright (c) 2026 Jonathan Peace
+Copyright (c) 2026 Jonathan Elliot Peace
 SPDX-License-Identifier: MIT
 """
 
