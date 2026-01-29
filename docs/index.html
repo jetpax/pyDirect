@@ -1035,20 +1035,30 @@ print('KEY_OK')
             if (bootOutput.includes('System booting...')) {
               addDebugLog('> System booting... detected!');
               bannerFound = true;
+              
+              // IMMEDIATELY send Ctrl+C - don't wait for reader release
+              // This catches boot.py before main.py starts
+              bootReader.releaseLock();
+              addDebugLog('> Sending interrupt...');
+              const writer = currentPort.writable.getWriter();
+              // Send multiple Ctrl+C rapidly to ensure interrupt is caught
+              await writer.write(new Uint8Array([0x03, 0x03, 0x03]));
+              await new Promise(r => setTimeout(r, 30));
+              await writer.write(new Uint8Array([0x03, 0x03]));
+              writer.releaseLock();
               break;
             }
           }
         }
-        bootReader.releaseLock();
         
-        // Send Ctrl+C to interrupt any running script
-        // We do this whether or not we saw the banner (device may have already booted)
-        addDebugLog(`> Sending interrupt...${bannerFound ? '' : ' (no banner detected, device may be at REPL)'}`);
-        const writer = currentPort.writable.getWriter();
-        await writer.write(new Uint8Array([0x03])); // Ctrl+C
-        await new Promise(r => setTimeout(r, 50));
-        await writer.write(new Uint8Array([0x03])); // Ctrl+C again
-        writer.releaseLock();
+        // Release reader if we didn't already (timeout or no banner case)
+        if (!bannerFound) {
+          bootReader.releaseLock();
+          addDebugLog('> Sending interrupt... (no banner detected, device may be at REPL)');
+          const writer = currentPort.writable.getWriter();
+          await writer.write(new Uint8Array([0x03, 0x03]));
+          writer.releaseLock();
+        }
         
         // Brief pause for interrupt to take effect
         await new Promise(resolve => setTimeout(resolve, 200));
