@@ -581,7 +581,7 @@
 
     <!-- View: New Device Flow -->
     <div id="viewNewDevice" class="view">
-      <button class="btn-back" onclick="goHome()">← Back</button>
+      <button class="btn-back" onclick="goBackToScenarios()">← Back</button>
       
       <div class="progress-steps">
         <div class="progress-step" id="step1"></div>
@@ -880,8 +880,6 @@
     // Go back to scenario selection, re-entering bootloader if needed
     window.goBackToScenarios = async function() {
       addLog('Returning to scenario selection...');
-      console.log('[goBackToScenarios] currentPort:', currentPort);
-      console.log('[goBackToScenarios] currentLoader:', currentLoader);
       
       // If we have no port at all (e.g., after device reset), go back to connect screen
       if (!currentPort) {
@@ -1010,9 +1008,7 @@
       document.getElementById('wifiModal')?.classList.remove('active');
     };
     
-    function showWifiModal() {
-      document.getElementById('wifiModal')?.classList.add('active');
-    }
+
     
     // ========== COPY TO CLIPBOARD ==========
     
@@ -1706,8 +1702,8 @@
     }
 
     // Upload certificates to device filesystem via REPL
-    async function uploadCertsToDevice(port, certPem, keyPem, addDebugLog) {
-      addDebugLog('> Creating /certs directory...');
+    async function uploadCertsToDevice(port, certPem, keyPem, log) {
+      log('Creating /certs directory...');
       
       // Create /certs directory (ignore error if exists)
       await sendREPLCommand(port, `
@@ -1719,7 +1715,7 @@ except OSError:
 print('DIR_OK')
 `, 3000, false);
 
-      addDebugLog('> Writing certificate...');
+      log('Writing certificate...');
       
       // Write cert file using base64 to handle special characters
       const certB64 = btoa(certPem);
@@ -1730,7 +1726,7 @@ with open('/certs/servercert.pem', 'wb') as f:
 print('CERT_OK')
 `, 5000, false);
 
-      addDebugLog('> Writing private key...');
+      log('Writing private key...');
       
       // Write key file
       const keyB64 = btoa(keyPem);
@@ -1740,33 +1736,24 @@ with open('/certs/prvtkey.pem', 'wb') as f:
 print('KEY_OK')
 `, 5000, false);
 
-      addDebugLog('> Certificates installed!');
+      log('Certificates installed!');
     }
 
     // Core WiFi setup function - transitions from bootloader to REPL and configures WiFi
     async function performWifiSetup() {
-      const debugLog = document.getElementById('debugLog');
-      debugLog.style.display = 'block';
-      debugLog.innerHTML = '';
-      
-      function addDebugLog(msg) {
-        const line = document.createElement('div');
-        line.textContent = msg;
-        debugLog.appendChild(line);
-        debugLog.scrollTop = debugLog.scrollHeight;
-      }
+      clearLog();
       
       try {
         wifiSetupBtn.style.display = 'block';
         wifiSetupBtn.textContent = 'Connecting to REPL...';
         wifiSetupBtn.disabled = true;
         
-        addDebugLog('> Connecting to REPL...');
+        addLog('Connecting to REPL...');
         
         // Transition from bootloader to REPL (with banner detection)
         await transitionToREPL();
         
-        addDebugLog('> Scanning for WiFi networks...');
+        addLog('Scanning for WiFi networks...');
         wifiSetupBtn.textContent = 'Scanning networks...';
         
         // Scan networks via REPL - output as JSON for easy parsing
@@ -1807,7 +1794,7 @@ print("JSON:" + json.dumps(result))
           throw new Error('No WiFi networks found');
         }
         
-        addDebugLog(`> Found ${networks.length} networks`);
+        addLog(`Found ${networks.length} networks`);
         
         // Network selection and connection loop (allows retry on failure)
         let connected = false;
@@ -1886,7 +1873,7 @@ print("JSON:" + json.dumps(result))
             continue;
           }
           
-          addDebugLog(`> Connecting to "${selectedNetwork.ssid}"...`);
+          addLog(`Connecting to "${selectedNetwork.ssid}"...`);
           wifiSetupBtn.textContent = 'Connecting to WiFi...';
           
           // Connect to WiFi via REPL (already in raw mode from scan)
@@ -1915,10 +1902,10 @@ else:
           if (connMatch) {
             deviceIP = connMatch[1];
             connected = true;
-            addDebugLog(`> Connected! IP: ${deviceIP}`);
+            addLog(`Connected! IP: ${deviceIP}`);
             
             // Save WiFi credentials and hostname to settings
-            addDebugLog(`> Saving settings...`);
+            addLog(`Saving settings...`);
             
             // Compute hostname from ESPLoader MAC (base MAC - consistent across interfaces)
             const macSuffix = detectedMacAddress 
@@ -1935,12 +1922,12 @@ settings.set("device.hostname", "${hostname}")
 settings.save()
 print("SETTINGS_OK")
 `, 5000, false);
-            addDebugLog(`> Settings saved (hostname: ${hostname})`);
+            addLog(`Settings saved (hostname: ${hostname})`);
             
             // Store for cert generation
             savedHostname = hostname;
           } else {
-            addDebugLog('> Connection failed');
+            addLog('Connection failed');
             const retry = confirm('WiFi connection failed. Wrong password?\n\nClick OK to try again, or Cancel to abort.');
             if (!retry) {
               throw new Error('Connection cancelled');
@@ -1951,23 +1938,23 @@ print("SETTINGS_OK")
         
         // Generate and install HTTPS certificate
         wifiSetupBtn.textContent = 'Generating certificate...';
-        addDebugLog('> Generating HTTPS certificate...');
+        addLog('Generating HTTPS certificate...');
         
         // Use hostname saved to settings (from ESPLoader base MAC)
         const certHostname = savedHostname + '.local';
-        addDebugLog(`> Hostname: ${certHostname}`);
+        addLog(`Hostname: ${certHostname}`);
         
         // Generate self-signed certificate
         const { certPem, keyPem } = generateSelfSignedCert(certHostname);
-        addDebugLog(`> Certificate generated (${certPem.length} bytes)`);
+        addLog(`Certificate generated (${certPem.length} bytes)`);
         
         // Upload to device
         wifiSetupBtn.textContent = 'Installing certificate...';
-        await uploadCertsToDevice(currentPort, certPem, keyPem, addDebugLog);
+        await uploadCertsToDevice(currentPort, certPem, keyPem, addLog);
         
         // === Set setup mode flag before reset ===
         wifiSetupBtn.textContent = 'Configuring setup mode...';
-        addDebugLog('> Setting setup mode flag...');
+        addLog('Setting setup mode flag...');
         await sendREPLCommand(currentPort, `
 from lib.sys import settings
 settings.set("setup_mode", True)
@@ -1977,7 +1964,7 @@ print("SETUP_MODE_SET")
         
         // Hard reset to apply settings and enter setup mode
         wifiSetupBtn.textContent = 'Restarting device...';
-        addDebugLog('> Resetting device...');
+        addLog('Resetting device...');
         await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
         
         // Close port
@@ -1986,7 +1973,7 @@ print("SETUP_MODE_SET")
         
         // Show Step 4 with device link and browser warning guidance
         const setupUrl = `https://${certHostname}/setup`;
-        addDebugLog(`> Device ready at ${setupUrl}`);
+        addLog(`Device ready at ${setupUrl}`);
         
         // Update Step 4 UI
         document.getElementById('finalHostname').textContent = certHostname;
@@ -1996,7 +1983,7 @@ print("SETUP_MODE_SET")
         updateProgressSteps(4);
         showNewDeviceStep(4);
         
-        addDebugLog('> Setup complete! Click "Open Device Setup" to continue.');
+        addLog('Setup complete! Click "Open Device Setup" to continue.');
 
 
       } catch (error) {
@@ -2007,9 +1994,9 @@ print("SETUP_MODE_SET")
         }
         
         console.error('WiFi setup error:', error);
-        wifiSetupBtn.textContent = '📡 Debug: WiFi Setup via REPL';
+        addLog(`Error: ${error.message}`);
+        wifiSetupBtn.textContent = 'Retry WiFi Setup';
         wifiSetupBtn.disabled = false;
-        alert('WiFi setup failed: ' + error.message);
         
         // Clean up on error
         try {
