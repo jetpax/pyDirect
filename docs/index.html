@@ -1187,6 +1187,16 @@
       clearLog();
       // Reset new device flow to step 1
       showNewDeviceStep(1);
+      // Reset re-provision flow to step 1
+      const reblessStep1 = document.getElementById('reblessStep1');
+      const reblessStep2 = document.getElementById('reblessStep2');
+      const reblessStatus = document.getElementById('reblessStatus');
+      if (reblessStep1) reblessStep1.style.display = 'block';
+      if (reblessStep2) reblessStep2.style.display = 'none';
+      if (reblessStatus) {
+        reblessStatus.textContent = 'Connecting...';
+        reblessStatus.style.color = 'var(--primary)';
+      }
     }
 
     // GitHub repository for firmware releases
@@ -2217,6 +2227,9 @@ print("SETUP_MODE_SET")
         document.getElementById('reblessStep2').style.display = 'block';
         
         addLog('Click "Open Device Setup" to set your password.');
+        
+        // Collapse terminal for cleaner completion screen
+        document.getElementById('terminalWrapper')?.classList.add('collapsed');
         
       } catch (error) {
         addLog(`Error: ${error.message}`);
