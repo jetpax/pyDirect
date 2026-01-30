@@ -753,8 +753,45 @@
         Generating new certificates and password. WiFi settings will be preserved.
       </p>
 
-      <!-- Process starts automatically -->
-      <div id="reblessStatus" style="color: var(--primary);">Connecting...</div>
+      <!-- Step 1: Processing (shown during provisioning) -->
+      <div id="reblessStep1">
+        <div id="reblessStatus" style="color: var(--primary);">Connecting...</div>
+      </div>
+
+      <!-- Step 2: Complete (shown after device reset) -->
+      <div id="reblessStep2" style="display: none;">
+        <div style="text-align: center; padding: 2rem 0;">
+          <div style="width: 48px; height: 48px; background: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <h2 style="font-size: 1.25rem; margin-bottom: 0.5rem;">Re-provision Complete!</h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+            Your device has new certificates. Hostname: <strong id="reblessFinalHostname">-</strong>
+          </p>
+        </div>
+        
+        <!-- Browser Security Warning Guidance -->
+        <div class="hint-box" style="text-align: left; margin-bottom: 1rem;">
+          <i class="ti ti-alert-triangle" style="color: var(--warning);"></i>
+          <div style="flex: 1;">
+            <strong style="display: block; margin-bottom: 0.25rem;">Next: Accept Browser Security Warning</strong>
+            <span style="font-size: 0.8rem;">
+              When you visit your device, your browser will show a security warning. 
+              This is expected — click <strong>"Advanced"</strong> then <strong>"Proceed"</strong> 
+              to trust your device's new certificate.
+            </span>
+          </div>
+        </div>
+        
+        <a id="reblessDeviceLink" href="#" target="_blank" class="btn btn-primary" style="text-decoration: none;">
+          <i class="ti ti-external-link"></i> Open Device Setup
+        </a>
+        <button class="btn btn-secondary" onclick="goHome()" style="margin-top: 0.5rem;">
+          Done
+        </button>
+      </div>
     </div>
 
     <!-- Terminal (Collapsible) -->
@@ -2128,11 +2165,13 @@ print("CREDS:" + json.dumps({"h": hostname, "p": password, "s": ssid}))
     async function startRebless() {
       try {
         addLog('Starting re-provisioning...');
+        document.getElementById('reblessStatus').textContent = 'Connecting to REPL...';
         
         // Transition from bootloader to REPL
         await transitionToREPL();
         
         // Read current hostname
+        document.getElementById('reblessStatus').textContent = 'Reading device settings...';
         const output = await sendREPLCommand(currentPort, `
 from lib.sys import settings
 print("HOST:" + settings.get("device.hostname", "pydirect-xxxx"))
@@ -2142,36 +2181,47 @@ print("HOST:" + settings.get("device.hostname", "pydirect-xxxx"))
         const hostname = match ? match[1].trim() : 'pydirect-new';
         
         addLog(`Generating new certificate for ${hostname}.local...`);
+        document.getElementById('reblessStatus').textContent = 'Generating certificate...';
         const certHostname = hostname + '.local';
         const { certPem, keyPem } = generateSelfSignedCert(certHostname);
         
         addLog('Installing new certificate...');
+        document.getElementById('reblessStatus').textContent = 'Installing certificate...';
         await uploadCertsToDevice(currentPort, certPem, keyPem, addLog);
         
-        // Set new password via prompt
-        const newPassword = prompt('Enter new WebREPL password:');
-        if (newPassword) {
-          await sendREPLCommand(currentPort, `
+        // Enable setup mode so device shows password entry page
+        addLog('Enabling setup mode...');
+        document.getElementById('reblessStatus').textContent = 'Configuring setup mode...';
+        await sendREPLCommand(currentPort, `
 from lib.sys import settings
-settings.set("server.webrepl_password", "${newPassword}")
-settings.set("setup_mode", False)
+settings.set("setup_mode", True)
 settings.save()
-print("SAVED")
+print("SETUP_MODE_SET")
 `, 5000, false);
-          addLog('New password saved');
-        }
         
         addLog('Restarting device...');
+        document.getElementById('reblessStatus').textContent = 'Restarting device...';
         await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
         
         await currentPort.close();
         currentPort = null;
         
         addLog(`✓ Re-provisioning complete!`);
-        addLog(`Connect at: https://${certHostname}`);
+        addLog(`Device ready at: https://${certHostname}`);
+        
+        // Show completion UI with device link
+        const setupUrl = `https://${certHostname}/setup`;
+        document.getElementById('reblessFinalHostname').textContent = certHostname;
+        document.getElementById('reblessDeviceLink').href = setupUrl;
+        document.getElementById('reblessStep1').style.display = 'none';
+        document.getElementById('reblessStep2').style.display = 'block';
+        
+        addLog('Click "Open Device Setup" to set your password.');
         
       } catch (error) {
         addLog(`Error: ${error.message}`);
+        document.getElementById('reblessStatus').textContent = `Error: ${error.message}`;
+        document.getElementById('reblessStatus').style.color = 'var(--error)';
       }
     }
     
