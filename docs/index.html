@@ -897,12 +897,13 @@
           
           // Close port if open (might be in REPL mode)
           try { await currentPort.close(); } catch(e) {}
+          await new Promise(r => setTimeout(r, 100)); // Brief delay after close
           
-          // Re-open at bootloader baud rate (same as connectAndDetect)
+          // Re-open at bootloader baud rate
           await currentPort.open({ baudRate: 115200 });
+          await new Promise(r => setTimeout(r, 100)); // Brief delay after open
           
-          // Create new ESPLoader and initialize (this does the reset + sync sequence)
-          // Use initialize() like detectHardware() does, not connect()
+          // Create new ESPLoader and initialize (this triggers reset into download mode)
           const loader = new ESPLoader(currentPort, { log: console.log, debug: console.debug, error: console.error });
           await loader.initialize();
           
@@ -912,6 +913,7 @@
           
           addLog('Bootloader reconnected');
         } catch (e) {
+          console.error('[goBackToScenarios] Reconnect error:', e);
           addLog(`Reconnect failed: ${e.message}`)
           // Fall back to full reset - user will need to re-select port
           goHome();
@@ -920,6 +922,8 @@
       }
       
       // Show scenario selection with scenarios visible
+      clearLog();
+      addLog('Device connected - select an action');
       showView('viewLanding');
       document.getElementById('landingConnect').style.display = 'none';
       document.getElementById('landingScenarios').style.display = 'block';
@@ -2231,9 +2235,8 @@ print("SETUP_MODE_SET")
         document.getElementById('reblessStatus').textContent = 'Restarting device...';
         await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
         
-        // Close port - device is rebooting, connection is invalid
-        await currentPort.close();
-        currentPort = null;
+        // Keep port reference but null loader - device is rebooting
+        // goBackToScenarios will close/reopen port to re-enter bootloader
         currentLoader = null;
         
         addLog(`✓ Re-provisioning complete!`);
