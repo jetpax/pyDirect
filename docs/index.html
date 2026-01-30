@@ -866,6 +866,15 @@
     window.goHome = function() {
       showView('viewLanding');
       resetState();
+      // Reset landing view to initial state (show connect, hide scenarios)
+      document.getElementById('landingConnect').style.display = 'block';
+      document.getElementById('landingScenarios').style.display = 'none';
+      const btn = document.getElementById('landingConnectBtn');
+      if (btn) {
+        btn.innerHTML = '<i class="ti ti-usb"></i> Connect Device';
+        btn.disabled = false;
+      }
+      document.getElementById('welcomeSubtitle').textContent = 'Connect your device to get started';
     };
     
     // Go back to scenario selection, re-entering bootloader if needed
@@ -873,6 +882,13 @@
       addLog('Returning to scenario selection...');
       console.log('[goBackToScenarios] currentPort:', currentPort);
       console.log('[goBackToScenarios] currentLoader:', currentLoader);
+      
+      // If we have no port at all (e.g., after device reset), go back to connect screen
+      if (!currentPort) {
+        addLog('No connection - please reconnect');
+        goHome();
+        return;
+      }
       
       // If we have a port but no loader, we need to re-enter bootloader
       if (currentPort && !currentLoader) {
@@ -896,15 +912,17 @@
           
           addLog('Bootloader reconnected');
         } catch (e) {
-          addLog(`Reconnect failed: ${e.message}`);
+          addLog(`Reconnect failed: ${e.message}`)
           // Fall back to full reset - user will need to re-select port
           goHome();
           return;
         }
       }
       
-      // Show scenario selection (viewLanding has the scenarios)
+      // Show scenario selection with scenarios visible
       showView('viewLanding');
+      document.getElementById('landingConnect').style.display = 'none';
+      document.getElementById('landingScenarios').style.display = 'block';
     };
     
     window.selectScenario = function(scenario) {
@@ -2213,8 +2231,10 @@ print("SETUP_MODE_SET")
         document.getElementById('reblessStatus').textContent = 'Restarting device...';
         await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
         
+        // Close port - device is rebooting, connection is invalid
         await currentPort.close();
         currentPort = null;
+        currentLoader = null;
         
         addLog(`✓ Re-provisioning complete!`);
         addLog(`Device ready at: https://${certHostname}`);
