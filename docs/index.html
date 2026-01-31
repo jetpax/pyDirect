@@ -1118,6 +1118,19 @@
           currentLoader = null;
         }
         if (currentPort) {
+          // Reset the device to normal boot mode before closing
+          // DTR=false keeps GPIO0 high (normal boot, not download mode)
+          // Pulse RTS to trigger hardware reset
+          try {
+            await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+            await new Promise(resolve => setTimeout(resolve, 50));
+            await currentPort.setSignals({ dataTerminalReady: false, requestToSend: true }); // Assert reset
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false }); // Release reset
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (e) {
+            console.log('[disconnectDevice] Reset signals error:', e);
+          }
           await currentPort.close();
           currentPort = null;
         }
