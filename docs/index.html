@@ -1206,9 +1206,8 @@
     let currentScenario = null;  // Track active scenario
     
     function resetState() {
-      if (currentPort) {
-        try { currentPort.close(); } catch(e) {}
-      }
+      // Reset device before closing port
+      resetAndClosePort();
       currentPort = null;
       currentLoader = null;
       detectedChipName = null;
@@ -1935,10 +1934,19 @@ settings.set("device.hostname", "${hostname}")
 settings.save()
 print("SETTINGS_OK")
 `, 5000, false);
-            addLog(`Settings saved (hostname: ${hostname})`);
+            addLog(`Settings saved (hostname: ${hostname})`, 'success');
             
-            // Store for cert generation
-            savedHostname = hostname;
+            // Return to scenarios - user can choose to re-provision (bless) if needed
+            addLog('WiFi configured! Use "Re-provision Device" to install certificates.');
+            wifiSetupBtn.textContent = 'WiFi Configured';
+            wifiSetupBtn.disabled = true;
+            
+            // Show back button to return to scenarios
+            setTimeout(() => {
+              goHome();
+            }, 2000);
+            return;
+            
           } else {
             addLog('Connection failed');
             const retry = confirm('WiFi connection failed. Wrong password?\n\nClick OK to try again, or Cancel to abort.');
@@ -1949,55 +1957,6 @@ print("SETTINGS_OK")
           }
         }
         
-        // Generate and install HTTPS certificate
-        wifiSetupBtn.textContent = 'Generating certificate...';
-        addLog('Generating HTTPS certificate...');
-        
-        // Use hostname saved to settings (from ESPLoader base MAC)
-        const certHostname = savedHostname + '.local';
-        addLog(`Hostname: ${certHostname}`);
-        
-        // Generate self-signed certificate
-        const { certPem, keyPem } = generateSelfSignedCert(certHostname);
-        addLog(`Certificate generated (${certPem.length} bytes)`);
-        
-        // Upload to device
-        wifiSetupBtn.textContent = 'Installing certificate...';
-        await uploadCertsToDevice(currentPort, certPem, keyPem, addLog);
-        
-        // === Set setup mode flag before reset ===
-        wifiSetupBtn.textContent = 'Configuring setup mode...';
-        addLog('Setting setup mode flag...');
-        await sendREPLCommand(currentPort, `
-from lib.sys import settings
-settings.set("setup_mode", True)
-settings.save()
-print("SETUP_MODE_SET")
-`, 5000, false);
-        
-        // Hard reset to apply settings and enter setup mode
-        wifiSetupBtn.textContent = 'Restarting device...';
-        addLog('Resetting device...');
-        await sendREPLCommand(currentPort, 'import machine; machine.reset()', 1000, false);
-        
-        // Close port
-        await currentPort.close();
-        currentPort = null;
-        
-        // Show Step 4 with device link and browser warning guidance
-        const setupUrl = `https://${certHostname}/setup`;
-        addLog(`Device ready at ${setupUrl}`);
-        
-        // Update Step 4 UI
-        document.getElementById('finalHostname').textContent = certHostname;
-        document.getElementById('deviceLink').href = setupUrl;
-        
-        // Show Step 4
-        updateProgressSteps(4);
-        showNewDeviceStep(4);
-        
-        addLog('Setup complete! Click "Open Device Setup" to continue.');
-
 
       } catch (error) {
         // Handle user cancellation gracefully (don't show error)
@@ -2049,12 +2008,8 @@ print("SETUP_MODE_SET")
       connectBtn.style.display = 'block';
       flashBtn.style.display = 'none';
       wifiSetupBtn.style.display = 'none';
-      // Clean up serial connection
-      try {
-        if (currentPort) await currentPort.close();
-      } catch (e) {}
-      currentPort = null;
-      currentLoader = null;
+      // Clean up serial connection with proper device reset
+      await resetAndClosePort();
     });
 
     // ========== FLASH FIRMWARE ==========
@@ -2150,11 +2105,39 @@ print("SETUP_MODE_SET")
         btn.textContent = 'Flash Failed';
         btn.disabled = false;
         
-        try { if (currentPort) await currentPort.close(); } catch (e) {}
-        currentPort = null;
-        currentLoader = null;
+        await resetAndClosePort();
       }
     };
+    
+    /**
+     * Helper to reset device and close port cleanly
+     * Used when exiting flows that may leave device in bootloader
+     */
+    async function resetAndClosePort() {
+      try {
+        if (currentLoader) {
+          await currentLoader.disconnect();
+          currentLoader = null;
+        }
+        if (currentPort) {
+          // Reset device to normal boot before closing
+          try {
+            await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+            await new Promise(resolve => setTimeout(resolve, 50));
+            await currentPort.setSignals({ dataTerminalReady: false, requestToSend: true });
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await currentPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (e) {
+            console.log('[resetAndClosePort] Reset signals error:', e);
+          }
+          await currentPort.close();
+          currentPort = null;
+        }
+      } catch (e) {
+        console.log('[resetAndClosePort] Error:', e);
+      }
+    }
 
     // ========== CREDENTIAL RECOVERY (uses pre-connected port) ==========
     async function readCredentials() {
@@ -2324,8 +2307,9 @@ print("SAVED")
       await performWifiSetup();
     });
     
-    document.getElementById('skipWifiSetupBtn')?.addEventListener('click', () => {
+    document.getElementById('skipWifiSetupBtn')?.addEventListener('click', async () => {
       document.getElementById('flashCompleteModal')?.classList.remove('active');
+      await resetAndClosePort();
       goHome();
     });
   </script>
