@@ -28,6 +28,20 @@
       "manifest": "retrovms_mini",
       "artifact_name": "RetroVMS_Mini",
       "description": "RetroVMS Mini - Vehicle control module"
+    },
+    {
+      "board": "ESP32_S3_16MB",
+      "target": "esp32s3",
+      "manifest": "waveshare_lcd_1.46",
+      "artifact_name": "Waveshare_LCD_1.46",
+      "description": "Waveshare 1.46\" Touch LCD (N16R8)"
+    },
+    {
+      "board": "ESP32_S3_16MB",
+      "target": "esp32s3",
+      "manifest": "waveshare_lcd_1.69",
+      "artifact_name": "Waveshare_LCD_1.69",
+      "description": "Waveshare 1.69\" Touch LCD (N16R8)"
     }
   ]
 }

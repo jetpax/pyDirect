@@ -1,5 +1,7 @@
 # pyDirect Agent Instructions
 
+> ⚠️ **CRITICAL**: If you cannot access a file (e.g., PDF, binary) or cannot understand something the user has referenced, **STOP and ask for clarification immediately**. Do NOT proceed with best-effort guesses or assumptions. This saves time and prevents wasted effort on incorrect interpretations.
+
 **pyDirect** is a suite of C-based accelerator modules for MicroPython on ESP32. These modules implement high-performance functionality directly in C, achieving near-native performance for networking, communication, and I/O operations.
 
 ## Project Overview
@@ -135,3 +137,88 @@ The web flasher at `https://jetpax.github.io/pyDirect/`:
 - **ESP32-P4** - High-performance (via C6 WiFi coprocessor)
 
 > Note: Vanilla ESP32 (Xtensa LX6) is not supported due to atomic operation issues with WebRTC libraries.
+
+## ScriptOs Format
+
+ScriptOs are MicroPython scripts run on-device via Scripto Studio. They use a special config block pattern:
+
+```python
+# === START_CONFIG_PARAMETERS ===
+
+dict(
+    timeout = 5,  # Seconds before showing interrupt button (0 = never)
+    
+    info = dict(
+        name        = 'My ScriptO',
+        version     = [1, 0, 0],
+        category    = 'Test',
+        description = 'What this script does',
+        author      = 'YourName',
+    ),
+    
+    args = dict(
+        my_param = dict(
+            label = 'Select a value:',
+            type  = int,      # str, int, float, bool, list (GPIO), dict (dropdown)
+            value = 42        # Optional default
+        ),
+    )
+)
+
+# === END_CONFIG_PARAMETERS ===
+
+# Your code runs at MODULE LEVEL - no main() needed!
+print(f"User selected: {args.my_param}")
+```
+
+### Key Rules
+
+1. **Module-level execution** - Code runs immediately, no `def main()` pattern
+2. **Access config via `args`** - The config block becomes `class args` at runtime
+3. **Use `type=list`** for GPIO pin selection
+4. **Use `type=dict` with `items=dict(...)` for dropdown menus**
+
+## Hardware Access
+
+**Always use `lib.sys.board`** to access hardware. Never hardcode pins!
+
+```python
+from lib.sys import board, settings
+
+# Check capabilities
+if not board.has("can"):
+    raise RuntimeError("Board does not have CAN capability")
+
+# Get bus configuration
+can_bus = board.can("twai")  # or "can0" for multi-CAN boards
+tx_pin = can_bus.tx
+rx_pin = can_bus.rx
+
+# Get I2C bus
+i2c_bus = board.i2c("sensors")  # Returns scl, sda
+
+# Get device info
+display = board.device("display")
+driver = display.driver
+
+# Get individual pins
+led = board.pin("status_led")
+
+# Check resources
+if board.has("i2c.sensors"):
+    # Board has sensors I2C bus
+```
+
+### Board API Reference
+
+| Method | Returns | Example |
+|--------|---------|---------|
+| `board.id.name` | str | `"Waveshare ESP32-S3 Touch LCD 1.46"` |
+| `board.id.chip` | str | `"ESP32-S3"` |
+| `board.has(cap)` | bool | `board.has("display")` |
+| `board.pin(name)` | int | `board.pin("boot")` → `0` |
+| `board.i2c(name)` | I2C | `board.i2c("sensors").scl` |
+| `board.spi(name)` | SPI | `board.spi("sdcard").mosi` |
+| `board.can(name)` | CAN | `board.can("twai").tx` |
+| `board.uart(name)` | UART | `board.uart("primary").tx` |
+| `board.device(name)` | Device | `board.device("imu").type` |
